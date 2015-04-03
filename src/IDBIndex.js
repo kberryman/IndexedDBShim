@@ -40,7 +40,6 @@
                     "optionalParams": optionalParameters
                 };
                 // For this index, first create a column
-                me.__idbObjectStore.__storeProps.indexList = JSON.stringify(idxList);
                 var sql = ["ALTER TABLE", idbModules.util.quote(me.__idbObjectStore.name), "ADD", idbModules.util.quote(columnName), "BLOB"].join(" ");
                 idbModules.DEBUG && console.log(sql);
                 tx.executeSql(sql, [], function(tx, data){
@@ -62,7 +61,8 @@
                             }
                             else {
                                 idbModules.DEBUG && console.log("Updating the indexes in table", me.__idbObjectStore.__storeProps);
-                                tx.executeSql("UPDATE __sys__ set indexList = ? where name = ?", [me.__idbObjectStore.__storeProps.indexList, me.__idbObjectStore.name], function(){
+                                tx.executeSql("UPDATE __sys__ set indexList = ? where name = ?", [JSON.stringify(idxList), me.__idbObjectStore.name], function(){
+                                    me.__idbObjectStore.__storeProps.indexList = JSON.stringify(idxList);
                                     me.__idbObjectStore.__setReadyState("createIndex", true);
                                     success(me);
                                 }, error);

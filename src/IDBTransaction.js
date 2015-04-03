@@ -80,7 +80,18 @@
                     else {
                         try {
                             q = me.__requests[i];
+                          try {
                             q.op(tx, q.args, success, error);
+                          } catch (e) {
+                            if (e instanceof DOMException && e.code === 11 && tx === me.__tx) {
+                              //the transaction already closed because of timing open a new transaction to run this on
+                              me.db.__db.transaction(function (tx) {
+                                q.op(tx, q.args, success, error);
+                              });
+                            } else {
+                              throw e; // let other exceptions bubble up
+                            }
+                          }
                         }
                         catch (e) {
                             error(e);

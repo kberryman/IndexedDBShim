@@ -1022,7 +1022,6 @@ var cleanInterface = false;                 // jshint ignore:line
                     "optionalParams": optionalParameters
                 };
                 // For this index, first create a column
-                me.__idbObjectStore.__storeProps.indexList = JSON.stringify(idxList);
                 var sql = ["ALTER TABLE", idbModules.util.quote(me.__idbObjectStore.name), "ADD", idbModules.util.quote(columnName), "BLOB"].join(" ");
                 idbModules.DEBUG && console.log(sql);
                 tx.executeSql(sql, [], function(tx, data){
@@ -1044,7 +1043,8 @@ var cleanInterface = false;                 // jshint ignore:line
                             }
                             else {
                                 idbModules.DEBUG && console.log("Updating the indexes in table", me.__idbObjectStore.__storeProps);
-                                tx.executeSql("UPDATE __sys__ set indexList = ? where name = ?", [me.__idbObjectStore.__storeProps.indexList, me.__idbObjectStore.name], function(){
+                                tx.executeSql("UPDATE __sys__ set indexList = ? where name = ?", [JSON.stringify(idxList), me.__idbObjectStore.name], function(){
+                                    me.__idbObjectStore.__storeProps.indexList = JSON.stringify(idxList);
                                     me.__idbObjectStore.__setReadyState("createIndex", true);
                                     success(me);
                                 }, error);
@@ -1654,7 +1654,18 @@ var cleanInterface = false;                 // jshint ignore:line
                     else {
                         try {
                             q = me.__requests[i];
+                          try {
                             q.op(tx, q.args, success, error);
+                          } catch (e) {
+                            if (e instanceof DOMException && e.code === 11 && tx === me.__tx) {
+                              //the transaction already closed because of timing open a new transaction to run this on
+                              me.db.__db.transaction(function (tx) {
+                                q.op(tx, q.args, success, error);
+                              });
+                            } else {
+                              throw e; // let other exceptions bubble up
+                            }
+                          }
                         }
                         catch (e) {
                             error(e);
