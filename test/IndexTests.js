@@ -1,6 +1,6 @@
 queuedModule("Indexes");
 queuedAsyncTest("Creating Indexes", function(){
-    var dbOpenRequest = window.indexedDB.open(DB.NAME, ++dbVersion);
+    var dbOpenRequest = xc_indexedDB.open(DB.NAME, ++dbVersion);
     dbOpenRequest.onsuccess = function(e){
         ok(true, "Database Opened successfully");
         _("Database opened successfully with version");
@@ -39,7 +39,7 @@ queuedAsyncTest("Creating Indexes", function(){
 
 function openObjectStore(name, storeName, callback){
     queuedAsyncTest(name, function(){
-        var dbOpenRequest = window.indexedDB.open(DB.NAME);
+        var dbOpenRequest = xc_indexedDB.open(DB.NAME);
         dbOpenRequest.onsuccess = function(e){
             _("Database opened successfully");
             var db = dbOpenRequest.result;

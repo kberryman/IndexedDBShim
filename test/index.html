@@ -37,17 +37,24 @@
         </script>
         <script type = "text/javascript" src= "sampleData.js">
         </script>
-        <script type = "text/javascript" src= "../dist/IndexedDBShim.min.js">
+        <script type = "text/javascript" src= "../dist/IndexedDBShim.js">
         </script>
         <script type = "text/javascript">
+          var xc_indexedDB = window._indexedDB||window.indexedDB||window.mozIndexedDB||window.webkitIndexedDB||window.msIndexedDB;
+
             function startTests(){
-                if (typeof window.mozIndexedDB !== "undefined") {
+              if( (navigator.userAgent.match(/Safari/) && !navigator.userAgent.match(/Chrome/)) ) {
+                window.shimIndexedDB.__useShim();
+                window.shimIndexedDB.__debug(true);
+                xc_indexedDB = window.shimIndexedDB;
+              }
+              else if (typeof window.mozIndexedDB !== "undefined") {
                     window.indexedDB = window.mozIndexedDB;
                 }
                 else {
                     window.indexedDB = window.shimIndexedDB;
                     window.shimIndexedDB.__useShim();
-					window.shimIndexedDB.__debug(true);
+					          window.shimIndexedDB.__debug(true);
                     console.log("Starting Tests with shimIndexedDB");
                 }
                 deleteDB(function(){
@@ -63,7 +70,7 @@
             
             var dbVersion = 0;
             function deleteDB(callback){
-                var deleteReq = window.indexedDB.deleteDatabase(DB.NAME);
+                var deleteReq = xc_indexedDB.deleteDatabase(DB.NAME);
                 deleteReq.onsuccess = function(){
                     console.log("Database deleted");
                     callback();
@@ -75,7 +82,7 @@
             }
             
             function QUnitTests(){
-                var dbVersion = 1;
+                var dbVersion = 0;
                 var tests = ["Database", "ObjectStore", "ObjectStoreCrud", "Cursor", "Index"];
                 (function addTestSuite(i){
                     if (i >= tests.length) {

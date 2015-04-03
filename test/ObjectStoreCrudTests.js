@@ -1,6 +1,6 @@
 function onObjectStoreOpen(name, storeName, callback){
     queuedAsyncTest(name, function(){
-        var dbOpenRequest = window.indexedDB.open(DB.NAME);
+        var dbOpenRequest = xc_indexedDB.open(DB.NAME);
         dbOpenRequest.onsuccess = function(e){
             _("Database opened successfully");
             ok(true, "Database Opened successfully");
@@ -217,7 +217,7 @@ onObjectStoreOpen("Clear data in Object Store", DB.OBJECT_STORE_1, function(obje
 
 
 queuedAsyncTest("Lots of data Added to objectStore1", function(){
-    var dbOpenRequest = window.indexedDB.open(DB.NAME);
+    var dbOpenRequest = xc_indexedDB.open(DB.NAME);
     dbOpenRequest.onsuccess = function(e){
         _("Database opened successfully");
         ok(true, "Database Opened successfully");
