@@ -1,6 +1,6 @@
 queuedModule("Database");
 queuedAsyncTest("Opening a Database without version", function(){
-	var dbOpenRequest = window.indexedDB.open(DB.NAME);
+	var dbOpenRequest = xc_indexedDB.open(DB.NAME);
 	dbOpenRequest.onsuccess = function(e){
 		ok(true, "Database Opened successfully");
 		expect(2);
@@ -31,7 +31,7 @@ queuedAsyncTest("Opening a Database without version", function(){
 });
 
 queuedAsyncTest("Opening a database with a version " + dbVersion, function(){
-	var dbOpenRequest = window.indexedDB.open(DB.NAME, ++dbVersion);
+	var dbOpenRequest = xc_indexedDB.open(DB.NAME, ++dbVersion);
 	dbOpenRequest.onsuccess = function(e){
 		ok(true, "Database Opened successfully");
 		_("Database opened successfully with version");

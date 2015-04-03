@@ -5,6 +5,27 @@ module.exports = function(grunt) {
 	if (typeof process.env.saucekey !== "undefined") {
 		saucekey = process.env.SAUCE_ACCESS_KEY;
 	}
+
+  var os=require('os');
+  var ifaces=os.networkInterfaces();
+  var lookupIpAddress = null;
+  for (var dev in ifaces) {
+    if(dev != "en1" && dev != "en0") {
+      continue;
+    }
+    ifaces[dev].forEach(function(details){
+      if (details.family=='IPv4') {
+        lookupIpAddress = details.address;
+      }
+    });
+  }
+
+  //If an IP Address is passed
+  //we're going to use the ip/host from the param
+  //passed over the command line
+  //over the ip addressed that was looked up
+  var ipAddress = grunt.option('host') || lookupIpAddress || 'localhost';
+
 	grunt.initConfig({
 		pkg: grunt.file.readJSON('package.json'),
 		concat: {
@@ -22,17 +43,37 @@ module.exports = function(grunt) {
 			},
 			all: {
 				src: srcFiles,
-				dest: 'dist/<%=pkg.name%>.min.js',
+				dest: 'dist/<%=pkg.name%>.min.js'
 			}
 		},
-		connect: {
-			server: {
-				options: {
-					base: '.',
-					port: 9999
-				}
-			}
-		},
+    connect: {
+      options: {
+        port: 9000,
+          // Change this to '0.0.0.0' to access the server from outside.
+          hostname: ipAddress,
+          livereload: 35729
+      },
+      livereload: {
+        options: {
+          open: true,
+            base: '.'
+        }
+      },
+      test: {
+        options: {
+          port: 9001,
+            base: [
+            '.tmp',
+            'test',
+          ]
+        }
+      },
+      dist: {
+        options: {
+
+        }
+      }
+    },
 		qunit: {
 			all: {
 				options: {
@@ -40,7 +81,17 @@ module.exports = function(grunt) {
 				}
 			}
 		},
-
+    clean: {
+      dist: {
+        files: [{
+          dot: true,
+          src: [
+            '.tmp',
+          ]
+        }]
+      },
+      server: '.tmp'
+    },
 		'saucelabs-qunit': {
 			all: {
 				options: {
@@ -67,18 +118,35 @@ module.exports = function(grunt) {
 				jshintrc: '.jshintrc'
 			}
 		},
-
 		watch: {
 			dev: {
 				files: ["src/*"],
 				tasks: ["jshint", "concat"]
-			}
+			},
+      livereload: {
+        options: {
+          livereload: '<%= connect.options.livereload %>'
+        },
+        files: [
+          'src/**/*.js',
+          'test/*'
+        ]
+      }
 		}
 	});
 
 	for (var key in grunt.file.readJSON('package.json').devDependencies) {
 		if (key !== 'grunt' && key.indexOf('grunt') === 0) grunt.loadNpmTasks(key);
 	}
+
+  grunt.registerTask('server', function (target) {
+    grunt.task.run([
+      'build',
+      'clean:server',
+      'connect:livereload',
+      'watch'
+    ]);
+  });
 
 	grunt.registerTask('build', ['jshint', 'concat', 'uglify']);
 	var testJobs = ["build", "connect"];

@@ -35,7 +35,8 @@
     "matchdep": "^0.3.0",
     "mocha": "^2.2.1",
     "request": "^2.51.0",
-    "sinon": "^1.13.0"
+    "sinon": "^1.13.0",
+    "grunt-contrib-clean": "*"
   },
   "bundleDependencies": [],
   "license": "Apache 2.0",
