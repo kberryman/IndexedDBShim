@@ -1,6 +1,6 @@
-/*jshint globalstrict: true*/
-'use strict';
 (function(idbModules, undefined){
+    'use strict';
+
     /**
      * The IndexedDB KeyRange object
      * http://dvcs.w3.org/hg/IndexedDB/raw-file/tip/Overview.html#dfn-key-range
@@ -10,10 +10,17 @@
      * @param {Object} upperOpen
      */
     function IDBKeyRange(lower, upper, lowerOpen, upperOpen){
+        if (lower !== undefined) {
+            idbModules.Key.validate(lower);
+        }
+        if (upper !== undefined) {
+            idbModules.Key.validate(upper);
+        }
+
         this.lower = lower;
         this.upper = upper;
-        this.lowerOpen = lowerOpen;
-        this.upperOpen = upperOpen;
+        this.lowerOpen = !!lowerOpen;
+        this.upperOpen = !!upperOpen;
     }
 
     IDBKeyRange.only = function(value){

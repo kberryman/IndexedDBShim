@@ -91,13 +91,8 @@ describe('IDBTransaction.objectStore', function() {
         });
     });
 
-    it('should throw an error if the object store is not in the multi-store transaction', function(done) {
-        if (env.browser.isSafari) {
-            // BUG: Safari does not support opening multiple object stores
-            console.error('Skipping test: ' + this.test.title);
-            return done();
-        }
-
+    util.skipIf(env.isNative && env.browser.isSafari, 'should throw an error if the object store is not in the multi-store transaction', function(done) {
+        // BUG: Safari's native IndexedDB does not support opening multiple object stores
         util.createDatabase('inline', 'inline-generated', 'out-of-line', function(err, db) {
             // Transaction only includes two of the three stores
             var tx = db.transaction(['inline', 'out-of-line']);
@@ -120,7 +115,6 @@ describe('IDBTransaction.objectStore', function() {
         });
     });
 
-
     it('should throw an error if the transaction is closed', function(done) {
         util.createDatabase('out-of-line-generated', function(err, db) {
             var tx = db.transaction('out-of-line-generated', 'readwrite');
@@ -134,7 +128,7 @@ describe('IDBTransaction.objectStore', function() {
                 }
 
                 expect(err).to.be.an.instanceOf(env.DOMException);
-                if (!env.browser.isIE) {
+                if (env.isShimmed || !env.browser.isIE) {
                     expect(err.name).to.equal('InvalidStateError');     // IE is "TransactionInactiveError"
                 }
 

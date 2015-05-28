@@ -102,7 +102,7 @@ describe('IDBObjectStore.delete', function() {
 
             tx.oncomplete = function() {
                 expect(allData).to.have.same.deep.members([
-                    {key: 1, value: {id: 1}}
+                    {primaryKey: 1, key: 1, value: {id: 1}}
                 ]);
 
                 db.close();
@@ -189,11 +189,11 @@ describe('IDBObjectStore.delete', function() {
             function checkResults() {
                 // Make sure all 5 records existed before the delete
                 expect(allData).to.have.same.deep.members([
-                    {key: 1, value: {id: 1}},
-                    {key: 2, value: {id: 2}},
-                    {key: 3, value: {id: 3}},
-                    {key: 4, value: {id: 4}},
-                    {key: 5, value: {id: 5}}
+                    {primaryKey: 1, key: 1, value: {id: 1}},
+                    {primaryKey: 2, key: 2, value: {id: 2}},
+                    {primaryKey: 3, key: 3, value: {id: 3}},
+                    {primaryKey: 4, key: 4, value: {id: 4}},
+                    {primaryKey: 5, key: 5, value: {id: 5}}
                 ]);
 
                 // Make sure all data was deleted
@@ -229,8 +229,8 @@ describe('IDBObjectStore.delete', function() {
 
             tx.oncomplete = function() {
                 expect(allData).to.have.same.deep.members([
-                    {key: 222, value: 'two'},
-                    {key: 44, value: 'four'}
+                    {primaryKey: 222, key: 222, value: 'two'},
+                    {primaryKey: 44, key: 44, value: 'four'}
                 ]);
 
                 db.close();
@@ -239,13 +239,8 @@ describe('IDBObjectStore.delete', function() {
         });
     });
 
-    it('should delete data using compound out-of-line keys', function(done) {
-        if (env.browser.isIE) {
-            // BUG: IE does not support compound keys at all
-            console.error('Skipping test: ' + this.test.title);
-            return done();
-        }
-
+    util.skipIf(env.isNative && env.browser.isIE, 'should delete data using compound out-of-line keys', function(done) {
+        // BUG: IE's native IndexedDB does not support compound keys at all
         util.createDatabase('out-of-line-compound', function(err, db) {
             var tx = db.transaction('out-of-line-compound', 'readwrite');
             var store = tx.objectStore('out-of-line-compound');
@@ -269,8 +264,8 @@ describe('IDBObjectStore.delete', function() {
 
             tx.oncomplete = function() {
                 expect(allData).to.have.same.deep.members([
-                    {key: [3, 3], value: 'three'},
-                    {key: [4, '4'], value: 'four'}
+                    {primaryKey: [3, 3], key: [3, 3], value: 'three'},
+                    {primaryKey: [4, '4'], key: [4, '4'], value: 'four'}
                 ]);
 
                 db.close();
@@ -303,8 +298,8 @@ describe('IDBObjectStore.delete', function() {
 
             tx.oncomplete = function() {
                 expect(allData).to.have.same.deep.members([
-                    {key: 1, value: 'one'},
-                    {key: 3, value: 'three'}
+                    {primaryKey: 1, key: 1, value: 'one'},
+                    {primaryKey: 3, key: 3, value: 'three'}
                 ]);
 
                 db.close();
@@ -337,8 +332,8 @@ describe('IDBObjectStore.delete', function() {
 
             tx.oncomplete = function() {
                 expect(allData).to.have.same.deep.members([
-                    {key: 'one', value: {id: 'one'}},
-                    {key: 'three', value: {id: 'three'}}
+                    {primaryKey: 'one', key: 'one', value: {id: 'one'}},
+                    {primaryKey: 'three', key: 'three', value: {id: 'three'}}
                 ]);
 
                 db.close();
@@ -347,13 +342,8 @@ describe('IDBObjectStore.delete', function() {
         });
     });
 
-    it('should delete data using compound inline keys', function(done) {
-        if (env.browser.isIE) {
-            // BUG: IE does not support compound keys at all
-            console.error('Skipping test: ' + this.test.title);
-            return done();
-        }
-
+    util.skipIf(env.isNative && env.browser.isIE, 'should delete data using compound inline keys', function(done) {
+        // BUG: IE's native IndexedDB does not support compound keys at all
         util.createDatabase('inline-compound', function(err, db) {
             var tx = db.transaction('inline-compound', 'readwrite');
             var store = tx.objectStore('inline-compound');
@@ -377,8 +367,8 @@ describe('IDBObjectStore.delete', function() {
 
             tx.oncomplete = function() {
                 expect(allData).to.have.same.deep.members([
-                    {key: [2, 'two'], value: {id: 2, name: 'two'}},
-                    {key: [4, 'four'], value: {id: 4, name: 'four'}}
+                    {primaryKey: [2, 'two'], key: [2, 'two'], value: {id: 2, name: 'two'}},
+                    {primaryKey: [4, 'four'], key: [4, 'four'], value: {id: 4, name: 'four'}}
                 ]);
 
                 db.close();
@@ -411,8 +401,8 @@ describe('IDBObjectStore.delete', function() {
 
             tx.oncomplete = function() {
                 expect(allData).to.have.same.deep.members([
-                    {key: 2, value: {id: 2, name: 'two'}},
-                    {key: 4, value: {id: 4, name: 'four'}}
+                    {primaryKey: 2, key: 2, value: {id: 2, name: 'two'}},
+                    {primaryKey: 4, key: 4, value: {id: 4, name: 'four'}}
                 ]);
 
                 db.close();
@@ -445,8 +435,8 @@ describe('IDBObjectStore.delete', function() {
 
             tx.oncomplete = function() {
                 expect(allData).to.have.same.deep.members([
-                    {key: 'one', value: {name: {first: 'one'}}},
-                    {key: 'four', value: {name: {first: 'four'}}}
+                    {primaryKey: 'one', key: 'one', value: {name: {first: 'one'}}},
+                    {primaryKey: 'four', key: 'four', value: {name: {first: 'four'}}}
                 ]);
 
                 db.close();
@@ -455,13 +445,8 @@ describe('IDBObjectStore.delete', function() {
         });
     });
 
-    it('should delete data using compound dotted keys', function(done) {
-        if (env.browser.isIE) {
-            // BUG: IE does not support compound keys at all
-            console.error('Skipping test: ' + this.test.title);
-            return done();
-        }
-
+    util.skipIf(env.isNative && env.browser.isIE, 'should delete data using compound dotted keys', function(done) {
+        // BUG: IE's native IndexedDB does not support compound keys at all
         util.createDatabase('dotted-compound', function(err, db) {
             var tx = db.transaction('dotted-compound', 'readwrite');
             var store = tx.objectStore('dotted-compound');
@@ -485,8 +470,8 @@ describe('IDBObjectStore.delete', function() {
 
             tx.oncomplete = function() {
                 expect(allData).to.have.same.deep.members([
-                    {key: [1, 'one', 'abc'], value: {id: 1, name: {first: 'one', last: 'abc'}}},
-                    {key: [1, 'four', 'abc'], value: {id: 1, name: {first: 'four', last: 'abc'}}}
+                    {primaryKey: [1, 'one', 'abc'], key: [1, 'one', 'abc'], value: {id: 1, name: {first: 'one', last: 'abc'}}},
+                    {primaryKey: [1, 'four', 'abc'], key: [1, 'four', 'abc'], value: {id: 1, name: {first: 'four', last: 'abc'}}}
                 ]);
 
                 db.close();
@@ -519,8 +504,8 @@ describe('IDBObjectStore.delete', function() {
 
             tx.oncomplete = function() {
                 expect(allData).to.have.same.deep.members([
-                    {key: 2, value: {name: {first: 2, last: 'abc'}}},
-                    {key: 3, value: {name: {first: 3, last: 'abc'}}}
+                    {primaryKey: 2, key: 2, value: {name: {first: 2, last: 'abc'}}},
+                    {primaryKey: 3, key: 3, value: {name: {first: 3, last: 'abc'}}}
                 ]);
 
                 db.close();
@@ -536,12 +521,15 @@ describe('IDBObjectStore.delete', function() {
             var deletingCounter = 0, deletedCounter = 0;
 
             deleteKey('');                            // empty string
+            deleteKey(util.sampleData.veryLongString);// very long string
             deleteKey(0);                             // zero
             deleteKey(-99999);                        // negative number
             deleteKey(3.12345);                       // float
+            deleteKey(Infinity);                      // infinity
+            deleteKey(-Infinity);                     // negative infinity
             deleteKey(new Date(2000, 1, 2));          // Date
 
-            if (!env.browser.isIE) {
+            if (env.isShimmed || !env.browser.isIE) {
                 deleteKey([]);                        // empty array
                 deleteKey(['a', '', 'b']);            // array of strings
                 deleteKey([1, 2.345, -678]);          // array of numbers
@@ -572,16 +560,21 @@ describe('IDBObjectStore.delete', function() {
             var tx = db.transaction('out-of-line-generated', 'readwrite');
             var store = tx.objectStore('out-of-line-generated');
 
-            tryToDelete(undefined);                // undefined
-            tryToDelete(true);                     // boolean
-            tryToDelete(false);                    // boolean
-            tryToDelete({});                       // empty object
-            tryToDelete({foo: 'bar'});             // object
-            tryToDelete(new util.Person('John'));  // Class
-            tryToDelete([1, undefined, 2]);        // array with undefined
-            tryToDelete([1, null, 2]);             // array with null
-            tryToDelete([true, false]);            // array of booleans
-            tryToDelete([{foo: 'bar'}]);           // array of objects
+            tryToDelete(undefined);                             // undefined
+            tryToDelete(NaN);                                   // NaN
+            tryToDelete(true);                                  // boolean
+            tryToDelete(false);                                 // boolean
+            tryToDelete({});                                    // empty object
+            tryToDelete({foo: 'bar'});                          // object
+            tryToDelete(new util.sampleData.Person('John'));    // Class
+            tryToDelete([1, undefined, 2]);                     // array with undefined
+            tryToDelete([1, null, 2]);                          // array with null
+            tryToDelete([true, false]);                         // array of booleans
+            tryToDelete([{foo: 'bar'}]);                        // array of objects
+
+            if (env.isShimmed || !env.browser.isIE) {
+                tryToDelete(/^regex$/);                         // RegExp
+            }
 
             function tryToDelete(key) {
                 var err = null;
@@ -593,7 +586,10 @@ describe('IDBObjectStore.delete', function() {
                     err = e;
                 }
 
-                expect(err).to.be.an.instanceOf(env.DOMException);
+                if (!env.isPolyfilled) {
+                    expect(err).to.be.an.instanceOf(env.DOMException);  // The polyfill throws a normal error
+                }
+                expect(err).to.be.ok;
                 expect(err.name).to.equal('DataError');
             }
 
@@ -602,13 +598,8 @@ describe('IDBObjectStore.delete', function() {
         });
     });
 
-    it('should not throw an error if called an incomplete compound key', function(done) {
-        if (env.browser.isIE) {
-            // BUG: IE does not support compound keys at all
-            console.error('Skipping test: ' + this.test.title);
-            return done();
-        }
-
+    util.skipIf(env.isNative && env.browser.isIE, 'should not throw an error if called an incomplete compound key', function(done) {
+        // BUG: IE's native IndexedDB does not support compound keys at all
         util.createDatabase('inline-compound', function(err, db) {
             var tx = db.transaction('inline-compound', 'readwrite');
             var store = tx.objectStore('inline-compound');
@@ -629,7 +620,7 @@ describe('IDBObjectStore.delete', function() {
 
                 // Make sure the record still exists
                 expect(allData).to.have.same.deep.members([
-                    {key: [12345, 'John Doe'], value: {id: 12345, name: 'John Doe'}}
+                    {primaryKey: [12345, 'John Doe'], key: [12345, 'John Doe'], value: {id: 12345, name: 'John Doe'}}
                 ]);
 
                 db.close();

@@ -19,11 +19,11 @@ queuedAsyncTest("Creating Indexes", function(){
         _("Database upgrade called");
         var db = dbOpenRequest.result;
         var objectStore1 = dbOpenRequest.transaction.objectStore(DB.OBJECT_STORE_1);
-        var index1 = objectStore1.createIndex("IntIndex", "Int", {
+        var index1 = objectStore1.createIndex("Int Index", "Int", {
             "unique": false,
             "multiEntry": false
         });
-        var index2 = objectStore1.createIndex("StringIndex", "String");
+        var index2 = objectStore1.createIndex("String.Index", "String");
         equal(objectStore1.indexNames.length, 2, "2 Indexes on object store successfully created");
         _(objectStore1.indexNames);
         start();
@@ -64,7 +64,7 @@ openObjectStore("Check index exists after reopening database", DB.OBJECT_STORE_1
 });
 
 openObjectStore("Check index keyPath exists after reopening database", DB.OBJECT_STORE_1, function(objectStore){
-    var index = objectStore.index("IntIndex");
+    var index = objectStore.index("Int Index");
     equal(index.keyPath, "Int", "keyPath on index still exists");
     start();
     nextTest();
@@ -87,7 +87,7 @@ openObjectStore("Adding data after index is created", DB.OBJECT_STORE_1, functio
     };
 });
 openObjectStore("Index Cursor", DB.OBJECT_STORE_1, function(objectStore){
-    var index = objectStore.index("IntIndex");
+    var index = objectStore.index("Int Index");
     var indexCursorReq = index.openCursor();
     indexCursorReq.onsuccess = function(){
         var cursor = indexCursorReq.result;
@@ -110,7 +110,7 @@ openObjectStore("Index Cursor", DB.OBJECT_STORE_1, function(objectStore){
 });
 
 openObjectStore("Index Key Cursor", DB.OBJECT_STORE_1, function(objectStore){
-    var index = objectStore.index("IntIndex");
+    var index = objectStore.index("Int Index");
     var indexCursorReq = index.openKeyCursor();
     indexCursorReq.onsuccess = function(){
         var cursor = indexCursorReq.result;
@@ -133,7 +133,7 @@ openObjectStore("Index Key Cursor", DB.OBJECT_STORE_1, function(objectStore){
 });
 
 openObjectStore("Index Get", DB.OBJECT_STORE_1, function(objectStore){
-    var index = objectStore.index("IntIndex");
+    var index = objectStore.index("Int Index");
     var req = index.get(value.Int);
     req.onsuccess = function(){
         deepEqual(req.result, value, "Got object from Index Get");
@@ -151,7 +151,7 @@ openObjectStore("Index Get", DB.OBJECT_STORE_1, function(objectStore){
 
 
 openObjectStore("Index Get Key", DB.OBJECT_STORE_1, function(objectStore){
-    var index = objectStore.index("IntIndex");
+    var index = objectStore.index("Int Index");
     var req = index.getKey(value.Int);
     req.onsuccess = function(){
         equal(req.result, key, "Got key from Index Get");
@@ -168,7 +168,7 @@ openObjectStore("Index Get Key", DB.OBJECT_STORE_1, function(objectStore){
 });
 
 openObjectStore("Index update Cursor", DB.OBJECT_STORE_1, function(objectStore){
-    var index = objectStore.index("IntIndex");
+    var index = objectStore.index("Int Index");
     var indexCursorReq = index.openCursor(IDBKeyRange.only(value.Int));
     indexCursorReq.onsuccess = function(){
         var cursor = indexCursorReq.result;
@@ -207,5 +207,48 @@ openObjectStore("Index update Cursor", DB.OBJECT_STORE_1, function(objectStore){
         ok(false, "Could not continue opening cursor");
         start();
         nextTest();
+    };
+});
+
+queuedAsyncTest("Deleting Indexes", function(){
+    var dbOpenRequest = window.indexedDB.open(DB.NAME, ++dbVersion);
+    dbOpenRequest.onsuccess = function(e){
+        ok(true, "Database Opened successfully");
+        _("Database opened successfully with version");
+        dbOpenRequest.result.close();
+        nextTest();
+        start();
+    };
+    dbOpenRequest.onerror = function(e){
+        ok(false, "Database NOT Opened successfully");
+        _("Database NOT opened successfully");
+        nextTest();
+        start();
+    };
+    dbOpenRequest.onupgradeneeded = function(e){
+        ok(true, "Database Upgraded successfully");
+        _("Database upgrade called");
+        var db = dbOpenRequest.result;
+        var objectStore1 = dbOpenRequest.transaction.objectStore(DB.OBJECT_STORE_1);
+        var count = objectStore1.indexNames.length;
+
+        var index3 = objectStore1.createIndex("DeleteTestIndex", "String");
+        equal(objectStore1.indexNames.length, count + 1, "Index on object store successfully created");
+        objectStore1.deleteIndex("DeleteTestIndex");
+        equal(objectStore1.indexNames.length, count, "Index on object store successfully deleted");
+        objectStore1.createIndex("DeleteTestIndex", "Int");
+        equal(objectStore1.indexNames.length, count + 1, "Index with previously deleted name successfully created");
+        objectStore1.deleteIndex("DeleteTestIndex");
+        equal(objectStore1.indexNames.length, count, "Index with previously deleted name successfully deleted");
+
+        _(objectStore1.indexNames);
+        start();
+        stop();
+    };
+    dbOpenRequest.onblocked = function(e){
+        _("Opening database blocked");
+        ok(false, "Opening database blocked");
+        start();
+        stop();
     };
 });

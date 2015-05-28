@@ -47,12 +47,8 @@ describe('IDBDatabase.transaction', function() {
             });
         });
 
-        it('should open multiple object stores', function(done) {
-            if (env.browser.isSafari) {
-                // BUG: Safari does not support opening multiple object stores
-                console.error('Skipping test: ' + this.test.title);
-                return done();
-            }
+        util.skipIf(env.isNative && env.browser.isSafari, 'should open multiple object stores', function(done) {
+            // BUG: Safari's native IndexedDB does not support opening multiple object stores
 
             util.createDatabase('inline', 'out-of-line', function(err, db) {
                 var tx = db.transaction(['inline', 'out-of-line']);
@@ -118,6 +114,29 @@ describe('IDBDatabase.transaction', function() {
                 };
             });
         });
+
+        it('should allow simultaneous transaction', function(done) {
+            util.createDatabase('out-of-line-generated', function(err, db) {
+                var tx1 = db.transaction('out-of-line-generated', 'readwrite');
+                var tx2 = db.transaction('out-of-line-generated', 'readwrite');
+                var tx3 = db.transaction('out-of-line-generated', 'readwrite');
+
+                var store1 = tx1.objectStore('out-of-line-generated');
+                var store2 = tx2.objectStore('out-of-line-generated');
+                var store3 = tx3.objectStore('out-of-line-generated');
+
+                expect(store1.transaction).to.equal(tx1);
+                expect(store2.transaction).to.equal(tx2);
+                expect(store3.transaction).to.equal(tx3);
+
+                tx1.oncomplete = tx2.oncomplete = tx3.oncomplete = sinon.spy(function() {
+                    if (tx1.oncomplete.calledThrice) {
+                        db.close();
+                        done();
+                    }
+                });
+            });
+        });
     });
 
     describe('failure tests', function() {
@@ -149,9 +168,8 @@ describe('IDBDatabase.transaction', function() {
 
                 expect(err).to.be.an.instanceOf(env.DOMException);
 
-                if (!env.browser.isSafari) {
-                    // Safari throws "NotFoundError"
-                    expect(err.name).to.equal('InvalidAccessError');
+                if (env.isShimmed || !env.browser.isSafari) {
+                    expect(err.name).to.equal('InvalidAccessError'); // Safari throws "NotFoundError"
                 }
 
                 db.close();
@@ -203,7 +221,7 @@ describe('IDBDatabase.transaction', function() {
                 }
 
                 expect(err).to.be.an('object');
-                if (!env.browser.isIE) {
+                if (env.isShimmed || !env.browser.isIE) {
                     expect(err).to.be.an.instanceOf(TypeError);     // IE throws a DOMException
                     expect(err.name).to.equal('TypeError');         // IE throws "InvalidAccessError"
                 }
@@ -223,7 +241,7 @@ describe('IDBDatabase.transaction', function() {
                 }
 
                 expect(err).to.be.an('object');
-                if (!env.browser.isIE && !env.browser.isFirefox) {
+                if (env.isShimmed || (!env.browser.isIE && !env.browser.isFirefox)) {
                     expect(err).to.be.an.instanceOf(TypeError);     // IE & Firefox throw a DOMException
                     expect(err.name).to.equal('TypeError');         // IE & Firefox throw "InvalidAccessError"
                 }

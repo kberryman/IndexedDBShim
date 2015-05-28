@@ -4,11 +4,60 @@
     var databaseNamePrefix = 'IndexedDBShim_Test_Database_';
     var dbNameCounter = 0;
 
+    /**
+     * This function runs before every test.
+     */
+    beforeEach(function() {
+        // Track the current test
+        util.currentTest = this.currentTest;
+
+        // A list of databases created during this test
+        util.currentTest.databases = [];
+
+        // Increase the slowness threshold
+        util.currentTest.slow(300);
+    });
+
+
+    /**
+     * This function runs after every test
+     */
+    afterEach(function(done) {
+        // Delete all databases that were created during this test
+        util.asyncForEach(util.currentTest.databases, done, function(dbName) {
+            return env.indexedDB.deleteDatabase(dbName);
+        });
+    });
+
+
     var util = window.util = {
+        sampleData: {
+            /**
+             * A custom class, used to test the IndexedDB structured cloning algorithm
+             */
+            Person: Person,
+
+            /**
+             * A very long string :)
+             */
+            veryLongString: new Array(1001).join('1234567890')  // 10,000 characters
+        },
+
+
         /**
-         * A custom class, used to test the IndexedDB structured cloning algorithm
+         * Skips the given test if the given condition is true.
+         * @param {boolean} condition
+         * @param {string} title
+         * @param {function} test
          */
-        Person: Person,
+        skipIf: function(condition, title, test) {
+            if (condition) {
+                it.skip(title, test);
+            }
+            else {
+                it(title, test);
+            }
+        },
 
 
         /**
@@ -25,12 +74,20 @@
                 // Open the database
                 var open = env.indexedDB.open(dbName, 1);
 
-                open.onerror = open.onblocked = function() {
-                    done(open.error);
+                open.onerror = open.onblocked = function(event) {
+                    var err;
+                    try {
+                        err = event.target.error;
+                        console.error(err.message);
+                    }
+                    finally {
+                        done(err || 'Unknown Error');
+                    }
                 };
 
                 // Add the specified schema items
                 open.onupgradeneeded = function() {
+                    open.transaction.onerror = open.onerror;
                     schema.forEach(function(schemaItem) {
                         createSchemaItem(open.transaction, schemaItem);
                     });
@@ -51,11 +108,33 @@
          * @param   {function}                  done    `function(err, data)`
          */
         getAll: function(store, done) {
+            util.query(store, done);
+        },
+
+
+        /**
+         * Queries data in the given object store or index.
+         *
+         * @param   {IDBObjectStore|IDBIndex}   store       The object store or index
+         * @param   {IDBKeyRange}               [keyRange]  The key or key range to query
+         * @param   {string}                    [direction] The direction of the cursor
+         * @param   {function}                  done        `function(err, data)`
+         */
+        query: function(store, keyRange, direction, done) {
+            if (arguments.length === 2) {
+                done = keyRange;
+                keyRange = undefined;
+                direction = 'next';
+            }
+            else if (arguments.length === 3) {
+                done = direction;
+                direction = 'next';
+            }
             var data = [];
-            var safariKeyOffset = 0;
+            var safariPrimaryKeyOffset = 0, safariKeyOffset = 0;
 
             try {
-                var open = store.openCursor();
+                var open = keyRange === undefined ? store.openCursor() : store.openCursor(keyRange, direction);
                 open.onerror = function() {
                     done(open.error, data);
                 };
@@ -63,13 +142,21 @@
                     var cursor = open.result;
                     if (cursor) {
                         var key = cursor.key;
-                        if (env.browser.isSafari && key instanceof Array) {
+                        var primaryKey = cursor.primaryKey;
+                        if (env.isNative && env.browser.isSafari) {
                             // BUG: Safari has a bug with compound-key cursors
-                            key.splice(0, safariKeyOffset);
-                            safariKeyOffset += key.length;
+                            if (primaryKey instanceof Array) {
+                                primaryKey.splice(0, safariPrimaryKeyOffset);
+                                safariPrimaryKeyOffset += primaryKey.length;
+                            }
+                            if (key instanceof Array) {
+                                key.splice(0, safariKeyOffset);
+                                safariKeyOffset += key.length;
+                            }
                         }
 
                         data.push({
+                            primaryKey: primaryKey,
                             key: key,
                             value: cursor.value
                         });
@@ -107,7 +194,14 @@
                 done(null, dbName);
             };
             request.onerror = request.onblocked = function() {
-                done(request.error, dbName);
+                    var err;
+                    try {
+                        err = request.error;
+                        console.error(err.message);
+                    }
+                    finally {
+                        done(err || 'Unknown Error');
+                    }
             };
         },
 
@@ -242,12 +336,6 @@
                 break;
             case 'compound-index-unique':
                 createIndex(schemaItem, ['id', 'name.first', 'name.last'], {unique: true});
-                break;
-            case 'compound-index-multi':
-                createIndex(schemaItem, ['id', 'name.first', 'name.last'], {multiEntry: true});
-                break;
-            case 'compound-index-unique-multi':
-                createIndex(schemaItem, ['id', 'name.first', 'name.last'], {unique: true, multiEntry: true});
                 break;
             default:
                 throw new Error(schemaItem + ' is not one of the pre-defined schema items');

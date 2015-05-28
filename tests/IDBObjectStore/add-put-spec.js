@@ -45,8 +45,8 @@
         });
 
         it('should save a structured clone of the data, not the actual data', function(done) {
-            var john = new util.Person('John Doe');
-            var bob = new util.Person('Bob Smith', 30, new Date(2000, 5, 20), true);
+            var john = new util.sampleData.Person('John Doe');
+            var bob = new util.sampleData.Person('Bob Smith', 30, new Date(2000, 5, 20), true);
 
             util.createDatabase('out-of-line-generated', function(err, db) {
                 var tx = db.transaction('out-of-line-generated', 'readwrite');
@@ -65,18 +65,18 @@
                     expect(allData).to.have.lengthOf(2);
 
                     // The data should have been cloned
-                    expect(allData).not.to.contain(john);
-                    expect(allData).not.to.contain(bob);
+                    expect(allData[0].value).not.to.equal(john);
+                    expect(allData[1].value).not.to.equal(bob);
 
                     // The data should have been saved as plain objects, not Person classes
-                    expect(allData[0]).not.to.be.an.instanceOf(util.Person);
-                    expect(allData[1]).not.to.be.an.instanceOf(util.Person);
+                    expect(allData[0].value).not.to.be.an.instanceOf(util.sampleData.Person);
+                    expect(allData[1].value).not.to.be.an.instanceOf(util.sampleData.Person);
 
                     // Only the instance properties should have been saved, not prototype properties
                     // The `dob` property should still be a Date class
                     expect(allData).to.have.same.deep.members([
-                        {key: 1, value: {name: 'John Doe'}},
-                        {key: 2, value: {name: 'Bob Smith', dob: new Date(2000, 5, 20), age: 30, isMarried: true}}
+                        {primaryKey: 1, key: 1, value: {name: 'John Doe'}},
+                        {primaryKey: 2, key: 2, value: {name: 'Bob Smith', dob: new Date(2000, 5, 20), age: 30, isMarried: true}}
                     ]);
 
                     db.close();
@@ -167,8 +167,8 @@
                         expect(save2.result).to.equal(45678);
 
                         expect(allData).to.have.same.deep.members([
-                            {key: 12345, value: {foo: 'bar'}},
-                            {key: 45678, value: {biz: 'baz'}}
+                            {primaryKey: 12345, key: 12345, value: {foo: 'bar'}},
+                            {primaryKey: 45678, key: 45678, value: {biz: 'baz'}}
                         ]);
 
                         db.close();
@@ -196,8 +196,8 @@
                         expect(save2.result).to.equal(2);
 
                         expect(allData).to.have.same.deep.members([
-                            {key: 1, value: {foo: 'bar'}},
-                            {key: 2, value: {biz: 'baz'}}
+                            {primaryKey: 1, key: 1, value: {foo: 'bar'}},
+                            {primaryKey: 2, key: 2, value: {biz: 'baz'}}
                         ]);
 
                         db.close();
@@ -206,23 +206,20 @@
                 });
             });
 
-            it('should allow generated out-of-line keys to be specified', function(done) {
-                if (env.browser.isSafari) {
-                    // BUG: Safari resets the key generator whenever key is specified, causing key conflicts
-                    console.error('Skipping test: ' + this.test.title);
-                    return done();
-                }
-
+            util.skipIf(env.isNative && env.browser.isSafari, 'should allow generated out-of-line keys to be specified', function(done) {
+                // BUG: Safari's native IndexedDB resets the key generator whenever key is specified, causing key conflicts
                 util.createDatabase('out-of-line-generated', function(err, db) {
                     var tx = db.transaction('out-of-line-generated', 'readwrite');
-                    tx.onerror = done;
+                    tx.onerror = function(event) {
+                        done(tx.error || event);
+                    };
 
                     var store = tx.objectStore('out-of-line-generated');
-                    var save1 = store[save]({foo: 'bar'});         // <-- generated key
-                    var save2 = store[save]({biz: 'baz'}, 'abc');  // <-- specified key
-                    var save3 = store[save]({bat: 'bar'});         // <-- generated key
-                    var save4 = store[save]({bar: 'foo'}, 99);     // <-- specified key
-                    var save5 = store[save]({baz: 'biz'});         // <-- generated key
+                    var save1 = store[save]({foo: 'bar'});          // <-- generated key
+                    var save2 = store[save]({biz: 'baz'}, 'abc');   // <-- specified key
+                    var save3 = store[save]({bat: 'bar'});          // <-- generated key
+                    var save4 = store[save]({bar: 'foo'}, 99);      // <-- specified key
+                    var save5 = store[save]({baz: 'biz'});          // <-- generated key
 
                     var allData;
                     util.getAll(store, function(err, data) {
@@ -230,18 +227,18 @@
                     });
 
                     tx.oncomplete = function() {
-                        expect(save1.result).to.equal(1);
-                        expect(save2.result).to.equal('abc');
-                        expect(save3.result).to.equal(2);
-                        expect(save4.result).to.equal(99);
-                        expect(save5.result).to.equal(100);
+                        expect(save1.result).to.equal(1);       // Generated keys should always start at 1
+                        expect(save2.result).to.equal('abc');   // This key was explicitly specified
+                        expect(save3.result).to.be.above(1);    // Depending on the implementation, it might be 2 or 3
+                        expect(save4.result).to.equal(99);      // This key was explicitly specified
+                        expect(save5.result).to.be.above(2);    // Depending on the implementation, it might be 3, 5, or 100
 
                         expect(allData).to.have.same.deep.members([
-                            {key: 'abc', value: {biz: 'baz'}},
-                            {key: 2, value: {bat: 'bar'}},
-                            {key: 99, value: {bar: 'foo'}},
-                            {key: 1, value: {foo: 'bar'}},
-                            {key: 100, value: {baz: 'biz'}}
+                            {primaryKey: 1, key: 1, value: {foo: 'bar'}},
+                            {primaryKey: 'abc', key: 'abc', value: {biz: 'baz'}},
+                            {primaryKey: save3.result, key: save3.result, value: {bat: 'bar'}},
+                            {primaryKey: 99, key: 99, value: {bar: 'foo'}},
+                            {primaryKey: save5.result, key: save5.result, value: {baz: 'biz'}}
                         ]);
 
                         db.close();
@@ -258,12 +255,15 @@
                     var savingCounter = 0, savedCounter = 0;
 
                     saveKey('');                            // empty string
+                    saveKey(util.sampleData.veryLongString);// very long string
                     saveKey(0);                             // zero
                     saveKey(-99999);                        // negative number
                     saveKey(3.12345);                       // float
+                    saveKey(Infinity);                      // infinity
+                    saveKey(-Infinity);                     // negative infinity
                     saveKey(new Date(2000, 1, 2));          // Date
 
-                    if (!env.browser.isIE) {
+                    if (env.isShimmed || !env.browser.isIE) {
                         saveKey([]);                        // empty array
                         saveKey(['a', '', 'b']);            // array of strings
                         saveKey([1, 2.345, -678]);          // array of numbers
@@ -307,19 +307,21 @@
                     var store = tx.objectStore('out-of-line');
                     tx.onerror = done;
 
-                    tryToSaveKey(undefined);                // undefined
-                    tryToSaveKey(true);                     // boolean
-                    tryToSaveKey(false);                    // boolean
-                    tryToSaveKey({});                       // empty object
-                    tryToSaveKey({foo: 'bar'});             // object
-                    tryToSaveKey(new util.Person('John'));  // Class
-                    tryToSaveKey([1, undefined, 2]);        // array with undefined
-                    tryToSaveKey([1, null, 2]);             // array with null
-                    tryToSaveKey([true, false]);            // array of booleans
-                    tryToSaveKey([{foo: 'bar'}]);           // array of objects
+                    tryToSaveKey(undefined);                            // undefined
+                    tryToSaveKey(NaN);                                  // NaN
+                    tryToSaveKey(true);                                 // boolean
+                    tryToSaveKey(false);                                // boolean
+                    tryToSaveKey({});                                   // empty object
+                    tryToSaveKey({foo: 'bar'});                         // object
+                    tryToSaveKey(new util.sampleData.Person('John'));   // Class
+                    tryToSaveKey([1, undefined, 2]);                    // array with undefined
+                    tryToSaveKey([1, null, 2]);                         // array with null
+                    tryToSaveKey([true, false]);                        // array of booleans
+                    tryToSaveKey([{foo: 'bar'}]);                       // array of objects
 
-                    if (!env.browser.isIE) {
-                        tryToSaveKey(null);                 // null
+                    if (env.isShimmed || !env.browser.isIE) {
+                        tryToSaveKey(null);                             // null
+                        tryToSaveKey(/^regex$/);                        // RegExp
                     }
 
                     function tryToSaveKey(key) {
@@ -332,7 +334,10 @@
                             err = e;
                         }
 
-                        expect(err).to.be.an.instanceOf(env.DOMException);
+                        if (!env.isPolyfilled) {
+                            expect(err).to.be.an.instanceOf(env.DOMException);  // The polyfill throws a normal error
+                        }
+                        expect(err).to.be.ok;
                         expect(err.name).to.equal('DataError');
                     }
 
@@ -348,29 +353,35 @@
                     tx.onerror = done;
                     var savingCounter = 0, savedCounter = 0;
 
-                    saveData(undefined);                    // undefined
-                    saveData(true);                         // boolean
-                    saveData(false);                        // boolean
-                    saveData('');                           // empty string
-                    saveData('hello world');                // string
-                    saveData(0);                            // zero
-                    saveData(-99999);                       // negative number
-                    saveData(3.12345);                      // float
-                    saveData({});                           // empty object
-                    saveData({foo: 'bar'});                 // object
-                    saveData(new Date(2000, 1, 2));         // Date
-                    saveData(new util.Person('John', 30));  // Class
-                    saveData([]);                           // empty array
-                    saveData(['a', '', 'b']);               // array of strings
-                    saveData([1, 2.345, -678]);             // array of numbers
-                    saveData([new Date(2005, 6, 7)]);       // array of Dates
-                    saveData([1, undefined, 2]);            // array with undefined
-                    saveData([1, null, 2]);                 // array with null
-                    saveData([true, false]);                // array of booleans
-                    saveData([{foo: 'bar'}, {}]);           // array of objects
+                    saveData(undefined);                                // undefined
+                    saveData(true);                                     // boolean
+                    saveData(false);                                    // boolean
+                    saveData('');                                       // empty string
+                    saveData(util.sampleData.veryLongString);           // very long string
+                    saveData('hello world');                            // string
+                    saveData(0);                                        // zero
+                    saveData(-99999);                                   // negative number
+                    saveData(3.12345);                                  // float
+                    saveData(Infinity);                                 // infinity
+                    saveData(-Infinity);                                // negative infinity
+                    saveData(NaN);                                      // NaN
+                    saveData({});                                       // empty object
+                    saveData({foo: 'bar'});                             // object
+                    saveData(new Date(2000, 1, 2));                     // Date
+                    saveData(new util.sampleData.Person('John', 30));   // Class
+                    saveData(/^regex$/);                                // RegExp
+                    saveData([]);                                       // empty array
+                    saveData(['a', '', 'b']);                           // array of strings
+                    saveData([1, 2.345, -678]);                         // array of numbers
+                    saveData([new Date(2005, 6, 7)]);                   // array of Dates
+                    saveData([1, undefined, 2]);                        // array with undefined
+                    saveData([1, null, 2]);                             // array with null
+                    saveData([1, NaN, 3]);                              // array with NaN
+                    saveData([true, false]);                            // array of booleans
+                    saveData([{foo: 'bar'}, {}]);                       // array of objects
 
-                    if (!env.browser.isIE) {
-                        saveData(null);                     // null
+                    if (env.isShimmed || !env.browser.isIE) {
+                        saveData(null);                                 // null
                     }
 
                     function saveData(data) {
@@ -393,7 +404,7 @@
                                         expect(get.result[i]).to.deep.equal(data[i]);
                                     }
                                 }
-                                else if (data instanceof util.Person) {
+                                else if (data instanceof util.sampleData.Person) {
                                     // Only the "name" and "age" properties should have been serialized
                                     expect(get.result).to.deep.equal({name: 'John', age: 30});
                                 }
@@ -437,6 +448,86 @@
                     done();
                 });
             });
+
+            it('should save out-of-line keys in multiple simultaneous transactions', function(done) {
+                util.createDatabase('out-of-line', function(err, db) {
+                    var tx1 = db.transaction('out-of-line', 'readwrite');
+                    var tx2 = db.transaction('out-of-line', 'readwrite');
+                    var tx3 = db.transaction('out-of-line', 'readwrite');
+
+                    var store1 = tx1.objectStore('out-of-line');
+                    var store2 = tx2.objectStore('out-of-line');
+                    var store3 = tx3.objectStore('out-of-line');
+
+                    var save1 = store1[save]({foo: 'one'}, 1);
+                    var save2 = store2[save]({foo: 'two'}, 2);
+                    var save3 = store3[save]({foo: 'three'}, 3);
+
+                    var allData;
+                    util.getAll(store3, function(err, data) {
+                        allData = data;
+                    });
+
+                    tx1.oncomplete = tx2.oncomplete = tx3.oncomplete = sinon.spy(function() {
+                        if (tx1.oncomplete.calledThrice) {
+                            expect(save1.result).to.equal(1);
+                            expect(save2.result).to.equal(2);
+                            expect(save3.result).to.equal(3);
+
+                            expect(allData).to.have.same.deep.members([
+                                {primaryKey: 1, key: 1, value: {foo: 'one'}},
+                                {primaryKey: 2, key: 2, value: {foo: 'two'}},
+                                {primaryKey: 3, key: 3, value: {foo: 'three'}}
+                            ]);
+
+                            db.close();
+                            done();
+                        }
+                    });
+                });
+            });
+
+            it('should save generated out-of-line keys in multiple simultaneous transactions', function(done) {
+                util.createDatabase('out-of-line-generated', function(err, db) {
+                    var tx1 = db.transaction('out-of-line-generated', 'readwrite');
+                    var tx2 = db.transaction('out-of-line-generated', 'readwrite');
+                    var tx3 = db.transaction('out-of-line-generated', 'readwrite');
+
+                    var store1 = tx1.objectStore('out-of-line-generated');
+                    var store2 = tx2.objectStore('out-of-line-generated');
+                    var store3 = tx3.objectStore('out-of-line-generated');
+
+                    var save1 = store1[save]({foo: 'one'});
+                    var save2 = store2[save]({foo: 'two'});
+                    var save3 = store3[save]({foo: 'three'});
+
+                    var allData;
+                    util.getAll(store3, function(err, data) {
+                        allData = data;
+                    });
+
+                    tx1.oncomplete = tx2.oncomplete = tx3.oncomplete = sinon.spy(function() {
+                        if (tx1.oncomplete.calledThrice) {
+                            if (save1.result === save2.result && save2.result === save3.result) {
+                                return done(new Error('The same primary key was generated for multiple records'));
+                            }
+
+                            expect(save1.result).to.equal(1);
+                            expect(save2.result).to.equal(2);
+                            expect(save3.result).to.equal(3);
+
+                            expect(allData).to.have.same.deep.members([
+                                {primaryKey: 1, key: 1, value: {foo: 'one'}},
+                                {primaryKey: 2, key: 2, value: {foo: 'two'}},
+                                {primaryKey: 3, key: 3, value: {foo: 'three'}}
+                            ]);
+
+                            db.close();
+                            done();
+                        }
+                    });
+                });
+            });
         });
 
         describe('inline keys', function() {
@@ -459,8 +550,8 @@
                         expect(save2.result).to.deep.equal(45678);
 
                         expect(allData).to.have.same.deep.members([
-                            {key: 12345, value: {id: 12345}},
-                            {key: 45678, value: {id: 45678}}
+                            {primaryKey: 12345, key: 12345, value: {id: 12345}},
+                            {primaryKey: 45678, key: 45678, value: {id: 45678}}
                         ]);
 
                         db.close();
@@ -488,8 +579,8 @@
                         expect(save2.result).to.deep.equal(2);
 
                         expect(allData).to.have.same.deep.members([
-                            {key: 1, value: {id: 1, foo: 'bar'}},
-                            {key: 2, value: {id: 2, biz: 'baz'}}
+                            {primaryKey: 1, key: 1, value: {id: 1, foo: 'bar'}},
+                            {primaryKey: 2, key: 2, value: {id: 2, biz: 'baz'}}
                         ]);
 
                         db.close();
@@ -498,13 +589,8 @@
                 });
             });
 
-            it('should allow generated inline keys to be specified', function(done) {
-                if (env.browser.isSafari) {
-                    // BUG: Safari resets the key generator whenever key is specified, causing key conflicts
-                    console.error('Skipping test: ' + this.test.title);
-                    return done();
-                }
-
+            util.skipIf(env.isNative && env.browser.isSafari, 'should allow generated inline keys to be specified', function(done) {
+                // BUG: Safari's native IndexedDB resets the key generator whenever key is specified, causing key conflicts
                 util.createDatabase('inline-generated', function(err, db) {
                     var tx = db.transaction('inline-generated', 'readwrite');
                     tx.onerror = done;
@@ -522,18 +608,18 @@
                     });
 
                     tx.oncomplete = function() {
-                        expect(save1.result).to.equal(1);
-                        expect(save2.result).to.equal('abc');
-                        expect(save3.result).to.equal(2);
-                        expect(save4.result).to.equal(99);
-                        expect(save5.result).to.equal(100);
+                        expect(save1.result).to.equal(1);       // Generated keys should always start at 1
+                        expect(save2.result).to.equal('abc');   // This key was explicitly specified
+                        expect(save3.result).to.be.above(1);    // Depending on the implementation, it might be 2 or 3
+                        expect(save4.result).to.equal(99);      // This key was explicitly specified
+                        expect(save5.result).to.be.above(2);    // Depending on the implementation, it might be 3, 5, or 100
 
                         expect(allData).to.have.same.deep.members([
-                            {key: 'abc', value: {id: 'abc', biz: 'baz'}},
-                            {key: 2, value: {id: 2, bat: 'bar'}},
-                            {key: 99, value: {id: 99, bar: 'foo'}},
-                            {key: 1, value: {id: 1, foo: 'bar'}},
-                            {key: 100, value: {id: 100, baz: 'biz'}}
+                            {primaryKey: 1, key: 1, value: {id: 1, foo: 'bar'}},
+                            {primaryKey: 'abc', key: 'abc', value: {id: 'abc', biz: 'baz'}},
+                            {primaryKey: save3.result, key: save3.result, value: {id: save3.result, bat: 'bar'}},
+                            {primaryKey: 99, key: 99, value: {id: 99, bar: 'foo'}},
+                            {primaryKey: save5.result, key: save5.result, value: {id: save5.result, baz: 'biz'}}
                         ]);
 
                         db.close();
@@ -550,12 +636,15 @@
                     var savingCounter = 0, savedCounter = 0;
 
                     saveKey('');                            // empty string
+                    saveKey(util.sampleData.veryLongString);// very long string
                     saveKey(0);                             // zero
                     saveKey(-99999);                        // negative number
                     saveKey(3.12345);                       // float
+                    saveKey(Infinity);                      // infinity
+                    saveKey(-Infinity);                     // negative infinity
                     saveKey(new Date(2000, 1, 2));          // Date
 
-                    if (!env.browser.isIE) {
+                    if (env.isShimmed || !env.browser.isIE) {
                         saveKey([]);                        // empty array
                         saveKey(['a', '', 'b']);            // array of strings
                         saveKey([1, 2.345, -678]);          // array of numbers
@@ -599,19 +688,21 @@
                     var store = tx.objectStore('inline');
                     tx.onerror = done;
 
-                    tryToSaveKey(undefined);                // undefined
-                    tryToSaveKey(true);                     // boolean
-                    tryToSaveKey(false);                    // boolean
-                    tryToSaveKey({});                       // empty object
-                    tryToSaveKey({foo: 'bar'});             // object
-                    tryToSaveKey(new util.Person('John'));  // Class
-                    tryToSaveKey([1, undefined, 2]);        // array with undefined
-                    tryToSaveKey([1, null, 2]);             // array with null
-                    tryToSaveKey([true, false]);            // array of booleans
-                    tryToSaveKey([{foo: 'bar'}]);           // array of objects
+                    tryToSaveKey(undefined);                            // undefined
+                    tryToSaveKey(NaN);                                  // NaN
+                    tryToSaveKey(true);                                 // boolean
+                    tryToSaveKey(false);                                // boolean
+                    tryToSaveKey({});                                   // empty object
+                    tryToSaveKey({foo: 'bar'});                         // object
+                    tryToSaveKey(new util.sampleData.Person('John'));   // Class
+                    tryToSaveKey(/^regex$/);                            // RegExp
+                    tryToSaveKey([1, undefined, 2]);                    // array with undefined
+                    tryToSaveKey([1, null, 2]);                         // array with null
+                    tryToSaveKey([true, false]);                        // array of booleans
+                    tryToSaveKey([{foo: 'bar'}]);                       // array of objects
 
-                    if (!env.browser.isIE) {
-                        tryToSaveKey(null);                 // null
+                    if (env.isShimmed || !env.browser.isIE) {
+                        tryToSaveKey(null);                             // null
                     }
 
                     function tryToSaveKey(key) {
@@ -624,7 +715,10 @@
                             err = e;
                         }
 
-                        expect(err).to.be.an.instanceOf(env.DOMException);
+                        if (!env.isPolyfilled) {
+                            expect(err).to.be.an.instanceOf(env.DOMException);  // The polyfill throws a normal error
+                        }
+                        expect(err).to.be.ok;
                         expect(err.name).to.equal('DataError');
                     }
 
@@ -640,20 +734,21 @@
                     tx.onerror = done;
                     var savingCounter = 0, savedCounter = 0;
 
-                    saveData({});                           // empty object
-                    saveData({foo: 'bar'});                 // object
-                    saveData(new util.Person('John', 30));  // Class
-                    saveData([]);                           // empty array
-                    saveData(['a', '', 'b']);               // array of strings
-                    saveData([1, 2.345, -678]);             // array of numbers
-                    saveData([new Date(2005, 6, 7)]);       // array of Dates
-                    saveData([1, undefined, 2]);            // array with undefined
-                    saveData([1, null, 2]);                 // array with null
-                    saveData([true, false]);                // array of booleans
-                    saveData([{foo: 'bar'}, {}]);           // array of objects
+                    saveData({});                                       // empty object
+                    saveData({foo: 'bar'});                             // object
+                    saveData(new util.sampleData.Person('John', 30));   // Class
+                    saveData([]);                                       // empty array
+                    saveData(['a', '', 'b']);                           // array of strings
+                    saveData([1, 2.345, -678]);                         // array of numbers
+                    saveData([new Date(2005, 6, 7)]);                   // array of Dates
+                    saveData([1, undefined, 2]);                        // array with undefined
+                    saveData([1, null, 2]);                             // array with null
+                    saveData([true, false]);                            // array of booleans
+                    saveData([{foo: 'bar'}, {}]);                       // array of objects
 
-                    if (!env.browser.isFirefox) {
-                        saveData(new Date(2000, 1, 2));     // Date
+                    if (env.isShimmed || !env.browser.isFirefox) {
+                        saveData(new Date(2000, 1, 2));                 // Date
+                        saveData(/^regex$/);                            // RegExp
                     }
 
                     function saveData(data) {
@@ -676,7 +771,7 @@
                                         expect(get.result[i]).to.deep.equal(data[i]);
                                     }
                                 }
-                                else if (data instanceof util.Person) {
+                                else if (data instanceof util.sampleData.Person) {
                                     // Only the "name" and "age" properties should have been serialized
                                     expect(get.result).to.deep.equal({id: get.result.id, name: 'John', age: 30});
                                 }
@@ -714,8 +809,11 @@
                     tryToSaveData(0);                   // zero
                     tryToSaveData(-99999);              // negative number
                     tryToSaveData(3.12345);             // float
+                    tryToSaveData(Infinity);            // infinity
+                    tryToSaveData(-Infinity);           // negative infinity
+                    tryToSaveData(NaN);                 // NaN
 
-                    if (!env.browser.isIE) {
+                    if (env.isShimmed || !env.browser.isIE) {
                         tryToSaveData(null);            // null
                     }
 
@@ -759,6 +857,86 @@
                     done();
                 });
             });
+
+            it('should save inline keys in multiple simultaneous transactions', function(done) {
+                util.createDatabase('inline', function(err, db) {
+                    var tx1 = db.transaction('inline', 'readwrite');
+                    var tx2 = db.transaction('inline', 'readwrite');
+                    var tx3 = db.transaction('inline', 'readwrite');
+
+                    var store1 = tx1.objectStore('inline');
+                    var store2 = tx2.objectStore('inline');
+                    var store3 = tx3.objectStore('inline');
+
+                    var save1 = store1[save]({id: 'one'});
+                    var save2 = store2[save]({id: 'two'});
+                    var save3 = store3[save]({id: 'three'});
+
+                    var allData;
+                    util.getAll(store3, function(err, data) {
+                        allData = data;
+                    });
+
+                    tx1.oncomplete = tx2.oncomplete = tx3.oncomplete = sinon.spy(function() {
+                        if (tx1.oncomplete.calledThrice) {
+                            expect(save1.result).to.equal('one');
+                            expect(save2.result).to.equal('two');
+                            expect(save3.result).to.equal('three');
+
+                            expect(allData).to.have.same.deep.members([
+                                {primaryKey: 'one', key: 'one', value: {id: 'one'}},
+                                {primaryKey: 'two', key: 'two', value: {id: 'two'}},
+                                {primaryKey: 'three', key: 'three', value: {id: 'three'}}
+                            ]);
+
+                            db.close();
+                            done();
+                        }
+                    });
+                });
+            });
+
+            it('should save generated inline keys in multiple simultaneous transactions', function(done) {
+                util.createDatabase('inline-generated', function(err, db) {
+                    var tx1 = db.transaction('inline-generated', 'readwrite');
+                    var tx2 = db.transaction('inline-generated', 'readwrite');
+                    var tx3 = db.transaction('inline-generated', 'readwrite');
+
+                    var store1 = tx1.objectStore('inline-generated');
+                    var store2 = tx2.objectStore('inline-generated');
+                    var store3 = tx3.objectStore('inline-generated');
+
+                    var save1 = store1[save]({foo: 'one'});
+                    var save2 = store2[save]({foo: 'two'});
+                    var save3 = store3[save]({foo: 'three'});
+
+                    var allData;
+                    util.getAll(store3, function(err, data) {
+                        allData = data;
+                    });
+
+                    tx1.oncomplete = tx2.oncomplete = tx3.oncomplete = sinon.spy(function() {
+                        if (tx1.oncomplete.calledThrice) {
+                            if (save1.result === save2.result && save2.result === save3.result) {
+                                return done(new Error('The same primary key was generated for multiple records'));
+                            }
+
+                            expect(save1.result).to.equal(1);
+                            expect(save2.result).to.equal(2);
+                            expect(save3.result).to.equal(3);
+
+                            expect(allData).to.have.same.deep.members([
+                                {primaryKey: 1, key: 1, value: {id: 1, foo: 'one'}},
+                                {primaryKey: 2, key: 2, value: {id: 2, foo: 'two'}},
+                                {primaryKey: 3, key: 3, value: {id: 3, foo: 'three'}}
+                            ]);
+
+                            db.close();
+                            done();
+                        }
+                    });
+                });
+            });
         });
 
         describe('dotted keys', function() {
@@ -781,8 +959,8 @@
                         expect(save2.result).to.deep.equal('Bob');
 
                         expect(allData).to.have.same.deep.members([
-                            {key: 'John', value: {name: {first: 'John', last: 'Doe'}}},
-                            {key: 'Bob', value: {name: {first: 'Bob', last: 'Smith'}}}
+                            {primaryKey: 'John', key: 'John', value: {name: {first: 'John', last: 'Doe'}}},
+                            {primaryKey: 'Bob', key: 'Bob', value: {name: {first: 'Bob', last: 'Smith'}}}
                         ]);
 
                         db.close();
@@ -810,8 +988,8 @@
                         expect(save2.result).to.deep.equal(2);
 
                         expect(allData).to.have.same.deep.members([
-                            {key: 1, value: {name: {first: 1}, lastName: 'Doe'}},
-                            {key: 2, value: {name: {first: 2}, lastName: 'Smith'}}
+                            {primaryKey: 1, key: 1, value: {name: {first: 1}, lastName: 'Doe'}},
+                            {primaryKey: 2, key: 2, value: {name: {first: 2}, lastName: 'Smith'}}
                         ]);
 
                         db.close();
@@ -819,16 +997,91 @@
                     };
                 });
             });
+
+            it('should save dotted keys in multiple simultaneous transactions', function(done) {
+                util.createDatabase('dotted', function(err, db) {
+                    var tx1 = db.transaction('dotted', 'readwrite');
+                    var tx2 = db.transaction('dotted', 'readwrite');
+                    var tx3 = db.transaction('dotted', 'readwrite');
+
+                    var store1 = tx1.objectStore('dotted');
+                    var store2 = tx2.objectStore('dotted');
+                    var store3 = tx3.objectStore('dotted');
+
+                    var save1 = store1[save]({name: {first: 'John'}});
+                    var save2 = store2[save]({name: {first: 'Sarah'}});
+                    var save3 = store3[save]({name: {first: 'Bob'}});
+
+                    var allData;
+                    util.getAll(store3, function(err, data) {
+                        allData = data;
+                    });
+
+                    tx1.oncomplete = tx2.oncomplete = tx3.oncomplete = sinon.spy(function() {
+                        if (tx1.oncomplete.calledThrice) {
+                            expect(save1.result).to.equal('John');
+                            expect(save2.result).to.equal('Sarah');
+                            expect(save3.result).to.equal('Bob');
+
+                            expect(allData).to.have.same.deep.members([
+                                {primaryKey: 'John', key: 'John', value: {name: {first: 'John'}}},
+                                {primaryKey: 'Sarah', key: 'Sarah', value: {name: {first: 'Sarah'}}},
+                                {primaryKey: 'Bob', key: 'Bob', value: {name: {first: 'Bob'}}}
+                            ]);
+
+                            db.close();
+                            done();
+                        }
+                    });
+                });
+            });
+
+            it('should save generated dotted keys in multiple simultaneous transactions', function(done) {
+                util.createDatabase('dotted-generated', function(err, db) {
+                    var tx1 = db.transaction('dotted-generated', 'readwrite');
+                    var tx2 = db.transaction('dotted-generated', 'readwrite');
+                    var tx3 = db.transaction('dotted-generated', 'readwrite');
+
+                    var store1 = tx1.objectStore('dotted-generated');
+                    var store2 = tx2.objectStore('dotted-generated');
+                    var store3 = tx3.objectStore('dotted-generated');
+
+                    var save1 = store1[save]({foo: 'one'});
+                    var save2 = store2[save]({foo: 'two'});
+                    var save3 = store3[save]({foo: 'three'});
+
+                    var allData;
+                    util.getAll(store3, function(err, data) {
+                        allData = data;
+                    });
+
+                    tx1.oncomplete = tx2.oncomplete = tx3.oncomplete = sinon.spy(function() {
+                        if (tx1.oncomplete.calledThrice) {
+                            if (save1.result === save2.result && save2.result === save3.result) {
+                                return done(new Error('The same primary key was generated for multiple records'));
+                            }
+
+                            expect(save1.result).to.equal(1);
+                            expect(save2.result).to.equal(2);
+                            expect(save3.result).to.equal(3);
+
+                            expect(allData).to.have.same.deep.members([
+                                {primaryKey: 1, key: 1, value: {name: {first: 1}, foo: 'one'}},
+                                {primaryKey: 2, key: 2, value: {name: {first: 2}, foo: 'two'}},
+                                {primaryKey: 3, key: 3, value: {name: {first: 3}, foo: 'three'}}
+                            ]);
+
+                            db.close();
+                            done();
+                        }
+                    });
+                });
+            });
         });
 
         describe('compound keys', function() {
-            it('should save data with a compound out-of-line key', function(done) {
-                if (env.browser.isIE) {
-                    // BUG: IE does not support compound keys at all
-                    console.error('Skipping test: ' + this.test.title);
-                    return done();
-                }
-
+            util.skipIf(env.isNative && env.browser.isIE, 'should save data with a compound out-of-line key', function(done) {
+                // BUG: IE's native IndexedDB does not support compound keys at all
                 util.createDatabase('out-of-line-compound', function(err, db) {
                     var tx = db.transaction('out-of-line-compound', 'readwrite');
                     tx.onerror = done;
@@ -847,8 +1100,8 @@
                         expect(save2.result).to.deep.equal(['a', 'b', 3]);
 
                         expect(allData).to.have.same.deep.members([
-                            {key: [1, 2, 'c'], value: {foo: 'bar'}},
-                            {key: ['a', 'b', 3], value: {biz: 'baz'}}
+                            {primaryKey: [1, 2, 'c'], key: [1, 2, 'c'], value: {foo: 'bar'}},
+                            {primaryKey: ['a', 'b', 3], key: ['a', 'b', 3], value: {biz: 'baz'}}
                         ]);
 
                         db.close();
@@ -857,13 +1110,8 @@
                 });
             });
 
-            it('should save data with a compound inline key', function(done) {
-                if (env.browser.isIE) {
-                    // BUG: IE does not support compound keys at all
-                    console.error('Skipping test: ' + this.test.title);
-                    return done();
-                }
-
+            util.skipIf(env.isNative && env.browser.isIE, 'should save data with a compound inline key', function(done) {
+                // BUG: IE's native IndexedDB does not support compound keys at all
                 util.createDatabase('inline-compound', function(err, db) {
                     var tx = db.transaction('inline-compound', 'readwrite');
                     tx.onerror = done;
@@ -882,8 +1130,8 @@
                         expect(save2.result).to.deep.equal([12345, 'Bob Smith']);
 
                         expect(allData).to.have.same.deep.members([
-                            {key: [12345, 'John Doe'], value: {id: 12345, name: 'John Doe'}},
-                            {key: [12345, 'Bob Smith'], value: {id: 12345, name: 'Bob Smith'}}
+                            {primaryKey: [12345, 'John Doe'], key: [12345, 'John Doe'], value: {id: 12345, name: 'John Doe'}},
+                            {primaryKey: [12345, 'Bob Smith'], key: [12345, 'Bob Smith'], value: {id: 12345, name: 'Bob Smith'}}
                         ]);
 
                         db.close();
@@ -892,13 +1140,8 @@
                 });
             });
 
-            it('should save data with a compound dotted key', function(done) {
-                if (env.browser.isIE) {
-                    // BUG: IE does not support compound keys at all
-                    console.error('Skipping test: ' + this.test.title);
-                    return done();
-                }
-
+            util.skipIf(env.isNative && env.browser.isIE, 'should save data with a compound dotted key', function(done) {
+                // BUG: IE's native IndexedDB does not support compound keys at all
                 util.createDatabase('dotted-compound', function(err, db) {
                     var tx = db.transaction('dotted-compound', 'readwrite');
                     tx.onerror = done;
@@ -917,8 +1160,8 @@
                         expect(save2.result).to.deep.equal([12345, 'Bob', 'Smith']);
 
                         expect(allData).to.have.same.deep.members([
-                            {key: [12345, 'John', 'Doe'], value: {id: 12345, name: {first: 'John', last: 'Doe'}}},
-                            {key: [12345, 'Bob', 'Smith'], value: {id: 12345, name: {first: 'Bob', last: 'Smith'}}}
+                            {primaryKey: [12345, 'John', 'Doe'], key: [12345, 'John', 'Doe'], value: {id: 12345, name: {first: 'John', last: 'Doe'}}},
+                            {primaryKey: [12345, 'Bob', 'Smith'], key: [12345, 'Bob', 'Smith'], value: {id: 12345, name: {first: 'Bob', last: 'Smith'}}}
                         ]);
 
                         db.close();
@@ -927,28 +1170,29 @@
                 });
             });
 
-            it('should allow these keys', function(done) {
-                if (env.browser.isIE) {
-                    // BUG: IE does not support compound keys at all
-                    console.error('Skipping test: ' + this.test.title);
-                    return done();
-                }
-
+            util.skipIf(env.isNative && env.browser.isIE, 'should allow these keys', function(done) {
+                // BUG: IE's native IndexedDB does not support compound keys at all
                 util.createDatabase('dotted-compound', function(err, db) {
                     var tx = db.transaction('dotted-compound', 'readwrite');
                     var store = tx.objectStore('dotted-compound');
                     tx.onerror = done;
                     var savingCounter = 0, savedCounter = 0;
 
-                    saveKey('');                            // empty string
-                    saveKey(0);                             // zero
-                    saveKey(-99999);                        // negative number
-                    saveKey(3.12345);                       // float
-                    saveKey(new Date(2000, 1, 2));          // Date
-                    saveKey([]);                            // empty array
-                    saveKey(['a', '', 'b']);                // array of strings
-                    saveKey([1, 2.345, -678]);              // array of numbers
-                    saveKey([new Date(2005, 6, 7)]);        // array of Dates
+                    saveKey('');                                    // empty string
+                    saveKey(0);                                     // zero
+                    saveKey(-99999);                                // negative number
+                    saveKey(3.12345);                               // float
+                    saveKey(Infinity);                              // infinity
+                    saveKey(-Infinity);                             // negative infinity
+                    saveKey(new Date(2000, 1, 2));                  // Date
+                    saveKey([]);                                    // empty array
+                    saveKey(['a', '', 'b']);                        // array of strings
+                    saveKey([1, 2.345, -678]);                      // array of numbers
+                    saveKey([new Date(2005, 6, 7)]);                // array of Dates
+
+                    if (!env.browser.isIE) {
+                        saveKey(util.sampleData.veryLongString);    // very long string
+                    }
 
                     function saveKey(key) {
                         savingCounter++;
@@ -981,29 +1225,26 @@
                 });
             });
 
-            it('should not allow these keys', function(done) {
-                if (env.browser.isIE) {
-                    // BUG: IE does not support compound keys at all
-                    console.error('Skipping test: ' + this.test.title);
-                    return done();
-                }
-
+            util.skipIf(env.isNative && env.browser.isIE, 'should not allow these keys', function(done) {
+                // BUG: IE's native IndexedDB does not support compound keys at all
                 util.createDatabase('dotted-compound', function(err, db) {
                     var tx = db.transaction('dotted-compound', 'readwrite');
                     var store = tx.objectStore('dotted-compound');
                     tx.onerror = done;
 
                     tryToSaveKey(undefined);                // undefined
+                    tryToSaveKey(NaN);                      // NaN
                     tryToSaveKey(true);                     // boolean
                     tryToSaveKey(false);                    // boolean
                     tryToSaveKey({});                       // empty object
                     tryToSaveKey({foo: 'bar'});             // object
+                    tryToSaveKey(/^regex$/);                // RegExp
                     tryToSaveKey([1, undefined, 2]);        // array with undefined
                     tryToSaveKey([1, null, 2]);             // array with null
                     tryToSaveKey([true, false]);            // array of booleans
                     tryToSaveKey([{foo: 'bar'}]);           // array of objects
 
-                    if (!env.browser.isIE) {
+                    if (env.isShimmed || !env.browser.isIE) {
                         tryToSaveKey(null);                 // null
                     }
 
@@ -1017,7 +1258,10 @@
                             err = e;
                         }
 
-                        expect(err).to.be.an.instanceOf(env.DOMException);
+                        if (!env.isPolyfilled) {
+                            expect(err).to.be.an.instanceOf(env.DOMException);  // The polyfill throws a normal error
+                        }
+                        expect(err).to.be.ok;
                         expect(err.name).to.equal('DataError');
                     }
 
@@ -1026,13 +1270,8 @@
                 });
             });
 
-            it('should throw an error if the key is incomplete', function(done) {
-                if (env.browser.isIE) {
-                    // BUG: IE does not support compound keys at all
-                    console.error('Skipping test: ' + this.test.title);
-                    return done();
-                }
-
+            util.skipIf(env.isNative && env.browser.isIE, 'should throw an error if the key is incomplete', function(done) {
+                // BUG: IE's native IndexedDB does not support compound keys at all
                 util.createDatabase('inline-compound', function(err, db) {
                     var tx = db.transaction('inline-compound', 'readwrite');
                     tx.onerror = done;
@@ -1045,11 +1284,92 @@
                         err = e;
                     }
 
-                    expect(err).to.be.an.instanceOf(env.DOMException);
+                    if (!env.isPolyfilled) {
+                        expect(err).to.be.an.instanceOf(env.DOMException);  // The polyfill throws a normal error
+                    }
+                    expect(err).to.be.ok;
                     expect(err.name).to.equal('DataError');
 
                     db.close();
                     done();
+                });
+            });
+
+            util.skipIf(env.isNative && env.browser.isIE, 'should save compound inline keys in multiple simultaneous transactions', function(done) {
+                // BUG: IE's native IndexedDB does not support compound keys at all
+                util.createDatabase('inline-compound', function(err, db) {
+                    var tx1 = db.transaction('inline-compound', 'readwrite');
+                    var tx2 = db.transaction('inline-compound', 'readwrite');
+                    var tx3 = db.transaction('inline-compound', 'readwrite');
+
+                    var store1 = tx1.objectStore('inline-compound');
+                    var store2 = tx2.objectStore('inline-compound');
+                    var store3 = tx3.objectStore('inline-compound');
+
+                    var save1 = store1[save]({id: 1, name: 'John'});
+                    var save2 = store2[save]({id: 2, name: 'Sarah'});
+                    var save3 = store3[save]({id: 3, name: 'Bob'});
+
+                    var allData;
+                    util.getAll(store3, function(err, data) {
+                        allData = data;
+                    });
+
+                    tx1.oncomplete = tx2.oncomplete = tx3.oncomplete = sinon.spy(function() {
+                        if (tx1.oncomplete.calledThrice) {
+                            expect(save1.result).to.deep.equal([1, 'John']);
+                            expect(save2.result).to.deep.equal([2, 'Sarah']);
+                            expect(save3.result).to.deep.equal([3, 'Bob']);
+
+                            expect(allData).to.have.same.deep.members([
+                                {primaryKey: [1, 'John'], key: [1, 'John'], value: {id: 1, name: 'John'}},
+                                {primaryKey: [2, 'Sarah'], key: [2, 'Sarah'], value: {id: 2, name: 'Sarah'}},
+                                {primaryKey: [3, 'Bob'], key: [3, 'Bob'], value: {id: 3, name: 'Bob'}}
+                            ]);
+
+                            db.close();
+                            done();
+                        }
+                    });
+                });
+            });
+
+            util.skipIf(env.isNative && env.browser.isIE, 'should save compound out-of-line keys in multiple simultaneous transactions', function(done) {
+                // BUG: IE's native IndexedDB does not support compound keys at all
+                util.createDatabase('out-of-line', function(err, db) {
+                    var tx1 = db.transaction('out-of-line', 'readwrite');
+                    var tx2 = db.transaction('out-of-line', 'readwrite');
+                    var tx3 = db.transaction('out-of-line', 'readwrite');
+
+                    var store1 = tx1.objectStore('out-of-line');
+                    var store2 = tx2.objectStore('out-of-line');
+                    var store3 = tx3.objectStore('out-of-line');
+
+                    var save1 = store1[save]({foo: 'one'}, [1, 'b', 3]);
+                    var save2 = store2[save]({foo: 'two'}, [2, 'b', 3]);
+                    var save3 = store3[save]({foo: 'three'}, [3, 'b', 3]);
+
+                    var allData;
+                    util.getAll(store3, function(err, data) {
+                        allData = data;
+                    });
+
+                    tx1.oncomplete = tx2.oncomplete = tx3.oncomplete = sinon.spy(function() {
+                        if (tx1.oncomplete.calledThrice) {
+                            expect(save1.result).to.deep.equal([1,'b',3]);
+                            expect(save2.result).to.deep.equal([2,'b',3]);
+                            expect(save3.result).to.deep.equal([3,'b',3]);
+
+                            expect(allData).to.have.same.deep.members([
+                                {primaryKey: [1,'b',3], key: [1,'b',3], value: {foo: 'one'}},
+                                {primaryKey: [2,'b',3], key: [2,'b',3], value: {foo: 'two'}},
+                                {primaryKey: [3,'b',3], key: [3,'b',3], value: {foo: 'three'}}
+                            ]);
+
+                            db.close();
+                            done();
+                        }
+                    });
                 });
             });
         });

@@ -1,11 +1,17 @@
 /* global module:false */
+/*jshint globalstrict: true*/
+"use strict";
+
 module.exports = function(grunt) {
-	var srcFiles = ['src/Init.js', 'src/util.js', 'src/Sca.js', 'src/Key.js', 'src/Event.js', 'src/DOMException.js', 'src/IDBRequest.js', 'src/IDBKeyRange.js', 'src/IDBCursor.js', 'src/IDBIndex.js', 'src/IDBObjectStore.js', 'src/IDBTransaction.js', 'src/IDBDatabase.js', 'src/IDBFactory.js', 'src/globalVars.js'];
+	var srcFiles = ['src/Init.js', 'src/util.js', 'src/polyfill.js', 'src/Sca.js', 'src/Key.js', 'src/Event.js', 'src/DOMException.js', 'src/IDBRequest.js', 'src/IDBKeyRange.js', 'src/IDBCursor.js', 'src/IDBIndex.js', 'src/IDBObjectStore.js', 'src/IDBTransaction.js', 'src/IDBDatabase.js', 'src/IDBFactory.js', 'src/globalVars.js'];
 	var saucekey = null;
 	if (typeof process.env.saucekey !== "undefined") {
 		saucekey = process.env.SAUCE_ACCESS_KEY;
 	}
 
+  var pkg = require('./package.json');
+  bumpVersion(pkg);
+    
   var os=require('os');
   var ifaces=os.networkInterfaces();
   var lookupIpAddress = null;
@@ -27,7 +33,7 @@ module.exports = function(grunt) {
   var ipAddress = grunt.option('host') || lookupIpAddress || 'localhost';
 
 	grunt.initConfig({
-		pkg: grunt.file.readJSON('package.json'),
+		pkg: pkg,
 		concat: {
 			dist: {
 				src: srcFiles,
@@ -37,9 +43,9 @@ module.exports = function(grunt) {
 		uglify: {
 			options: {
 				banner: '/*! <%= pkg.name %> - v<%= pkg.version %> - ' + '<%= grunt.template.today("yyyy-mm-dd") %> */\n',
-				sourceMap: 'dist/<%=pkg.name%>.min.map',
+				sourceMap: 'dist/<%=pkg.name%>.min.js.map',
 				sourceMapRoot: 'http://nparashuram.com/IndexedDBShim/',
-				sourceMappingURL: 'http://nparashuram.com/IndexedDBShim/dist/<%=pkg.name%>.min.map'
+				sourceMappingURL: 'http://nparashuram.com/IndexedDBShim/dist/<%=pkg.name%>.min.js.map'
 			},
 			all: {
 				src: srcFiles,
@@ -161,3 +167,13 @@ module.exports = function(grunt) {
 	grunt.registerTask('default', 'build');
 	grunt.registerTask('dev', ['build', 'connect', 'watch']);
 };
+
+/**
+ * Bumps the revision number of the node package object, so the the banner in indexeddbshim.min.js
+ * will match the next upcoming revision of the package.
+ */
+function bumpVersion(pkg) {
+    var version = pkg.version.split('.');
+    version[2] = parseInt(version[2]) + 1;
+    pkg.version = version.join('.');
+}

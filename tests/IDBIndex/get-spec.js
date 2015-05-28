@@ -97,7 +97,7 @@ describe('IDBIndex.get', function() {
                 expect(storeGet.result).not.to.be.ok;
                 expect(indexGet.result).not.to.be.ok;
 
-                if (!env.browser.isSafari) {
+                if (env.isShimmed || !env.browser.isSafari) {
                     expect(storeGet.result).to.be.undefined;    // Safari returns null
                     expect(indexGet.result).to.be.undefined;    // Safari returns null
                 }
@@ -213,7 +213,9 @@ describe('IDBIndex.get', function() {
             var tx = db.transaction('out-of-line', 'readwrite');
             var store = tx.objectStore('out-of-line');
             var index = store.index('inline-index');
-            tx.onerror = done;
+            tx.onerror = function(event) {
+                done(event.target.error);
+            };
 
             store.add('one', 101);
             store.add('two', 222);
@@ -238,7 +240,7 @@ describe('IDBIndex.get', function() {
                 expect(indexGet1.result).not.to.be.ok;
                 expect(indexGet2.result).not.to.be.ok;
                 expect(indexGet3.result).not.to.be.ok;
-                if (!env.browser.isSafari) {
+                if (env.isShimmed || !env.browser.isSafari) {
                     expect(indexGet1.result).to.be.undefined;   // Safari returns null
                     expect(indexGet2.result).to.be.undefined;   // Safari returns null
                     expect(indexGet3.result).to.be.undefined;   // Safari returns null
@@ -250,13 +252,8 @@ describe('IDBIndex.get', function() {
         });
     });
 
-    it('should get data using compound out-of-line keys', function(done) {
-        if (env.browser.isIE) {
-            // BUG: IE does not support compound keys at all
-            console.error('Skipping test: ' + this.test.title);
-            return done();
-        }
-
+    util.skipIf(env.isNative && env.browser.isIE, 'should get data using compound out-of-line keys', function(done) {
+        // BUG: IE's native IndexedDB does not support compound keys at all
         util.createDatabase('out-of-line-compound', 'inline-index', function(err, db) {
             var tx = db.transaction('out-of-line-compound', 'readwrite');
             var store = tx.objectStore('out-of-line-compound');
@@ -286,7 +283,7 @@ describe('IDBIndex.get', function() {
                 expect(indexGet1.result).not.to.be.ok;
                 expect(indexGet2.result).not.to.be.ok;
                 expect(indexGet3.result).not.to.be.ok;
-                if (!env.browser.isSafari) {
+                if (env.isShimmed || !env.browser.isSafari) {
                     expect(indexGet1.result).to.be.undefined;   // Safari returns null
                     expect(indexGet2.result).to.be.undefined;   // Safari returns null
                     expect(indexGet3.result).to.be.undefined;   // Safari returns null
@@ -328,7 +325,7 @@ describe('IDBIndex.get', function() {
                 expect(indexGet1.result).not.to.be.ok;
                 expect(indexGet2.result).not.to.be.ok;
                 expect(indexGet3.result).not.to.be.ok;
-                if (!env.browser.isSafari) {
+                if (env.isShimmed || !env.browser.isSafari) {
                     expect(indexGet1.result).to.be.undefined;   // Safari returns null
                     expect(indexGet2.result).to.be.undefined;   // Safari returns null
                     expect(indexGet3.result).to.be.undefined;   // Safari returns null
@@ -376,18 +373,15 @@ describe('IDBIndex.get', function() {
         });
     });
 
-    it('should get data using compound inline keys', function(done) {
-        if (env.browser.isIE) {
-            // BUG: IE does not support compound keys at all
-            console.error('Skipping test: ' + this.test.title);
-            return done();
-        }
-
+    util.skipIf(env.isNative && env.browser.isIE, 'should get data using compound inline keys', function(done) {
+        // BUG: IE's native IndexedDB does not support compound keys at all
         util.createDatabase('inline-compound', 'inline-index', function(err, db) {
             var tx = db.transaction('inline-compound', 'readwrite');
             var store = tx.objectStore('inline-compound');
             var index = store.index('inline-index');
-            tx.onerror = done;
+            tx.onerror = function(event) {
+                done(event.target.error);
+            };
 
             store.add({id: 1, name: 'one'});
             store.add({id: 2, name: 'two'});
@@ -423,7 +417,9 @@ describe('IDBIndex.get', function() {
             var tx = db.transaction('inline-generated', 'readwrite');
             var store = tx.objectStore('inline-generated');
             var index = store.index('inline-index');
-            tx.onerror = done;
+            tx.onerror = function(event) {
+                done(event.target.error);
+            };
 
             store.add({name: 'one'});
             store.add({name: 'two'});
@@ -444,8 +440,8 @@ describe('IDBIndex.get', function() {
                 expect(storeGet2.result).to.deep.equal({id: 1, name: 'one'});
                 expect(storeGet3.result).to.deep.equal({id: 5, name: 'five'});
 
-                // BUG: These browsers don't support indexes on generated inline keys
-                if (!env.browser.isFirefox && !env.browser.isSafari && !env.browser.isIE) {
+                // BUG: Only Chrome supports indexes on generated inline keys
+                if (env.isShimmed || env.browser.isChrome) {
                     expect(indexGet1.result).to.deep.equal({id: 3, name: 'three'});
                     expect(indexGet2.result).to.deep.equal({id: 1, name: 'one'});
                     expect(indexGet3.result).to.deep.equal({id: 5, name: 'five'});
@@ -493,13 +489,8 @@ describe('IDBIndex.get', function() {
         });
     });
 
-    it('should get data using compound dotted keys', function(done) {
-        if (env.browser.isIE) {
-            // BUG: IE does not support compound keys at all
-            console.error('Skipping test: ' + this.test.title);
-            return done();
-        }
-
+    util.skipIf(env.isNative && env.browser.isIE, 'should get data using compound dotted keys', function(done) {
+        // BUG: IE's native IndexedDB does not support compound keys at all
         util.createDatabase('dotted-compound', 'compound-index', function(err, db) {
             var tx = db.transaction('dotted-compound', 'readwrite');
             var store = tx.objectStore('dotted-compound');
@@ -561,8 +552,8 @@ describe('IDBIndex.get', function() {
                 expect(storeGet2.result).to.deep.equal({name: {first: 5, last: 'abc'}});
                 expect(storeGet3.result).to.deep.equal({name: {first: 1, last: 'abc'}});
 
-                // BUG: These browsers don't support indexes on generated inline keys
-                if (!env.browser.isFirefox && !env.browser.isSafari && !env.browser.isIE) {
+                // BUG: Only Chrome supports indexes on generated inline keys
+                if (env.isShimmed || env.isChrome) {
                     expect(indexGet1.result).to.deep.equal({name: {first: 4, last: 'abc'}});
                     expect(indexGet2.result).to.deep.equal({name: {first: 5, last: 'abc'}});
                     expect(indexGet3.result).to.deep.equal({name: {first: 1, last: 'abc'}});
@@ -582,12 +573,15 @@ describe('IDBIndex.get', function() {
             var gettingCounter = 0, gottenCounter = 0;
 
             getKey('');                            // empty string
+            getKey(util.sampleData.veryLongString);// very long string
             getKey(0);                             // zero
             getKey(-99999);                        // negative number
             getKey(3.12345);                       // float
+            getKey(Infinity);                      // infinity
+            getKey(-Infinity);                     // negative infinity
             getKey(new Date(2000, 1, 2));          // Date
 
-            if (!env.browser.isIE) {
+            if (env.isShimmed || !env.browser.isIE) {
                 getKey([]);                        // empty array
                 getKey(['a', '', 'b']);            // array of strings
                 getKey([1, 2.345, -678]);          // array of numbers
@@ -620,16 +614,21 @@ describe('IDBIndex.get', function() {
             var store = tx.objectStore('out-of-line-generated');
             var index = store.index('inline-index');
 
-            tryToGet(undefined);                // undefined
-            tryToGet(true);                     // boolean
-            tryToGet(false);                    // boolean
-            tryToGet({});                       // empty object
-            tryToGet({foo: 'bar'});             // object
-            tryToGet(new util.Person('John'));  // Class
-            tryToGet([1, undefined, 2]);        // array with undefined
-            tryToGet([1, null, 2]);             // array with null
-            tryToGet([true, false]);            // array of booleans
-            tryToGet([{foo: 'bar'}]);           // array of objects
+            tryToGet(undefined);                            // undefined
+            tryToGet(NaN);                                  // NaN
+            tryToGet(true);                                 // boolean
+            tryToGet(false);                                // boolean
+            tryToGet({});                                   // empty object
+            tryToGet({foo: 'bar'});                         // object
+            tryToGet(new util.sampleData.Person('John'));   // Class
+            tryToGet([1, undefined, 2]);                    // array with undefined
+            tryToGet([1, null, 2]);                         // array with null
+            tryToGet([true, false]);                        // array of booleans
+            tryToGet([{foo: 'bar'}]);                       // array of objects
+
+            if (env.isShimmed || !env.browser.isIE) {
+                tryToGet(/^regex$/);                        // RegExp
+            }
 
             function tryToGet(key, IDBObj) {
                 if (!IDBObj) {
@@ -646,7 +645,10 @@ describe('IDBIndex.get', function() {
                         err = e;
                     }
 
-                    expect(err).to.be.an.instanceOf(env.DOMException);
+                    if (!env.isPolyfilled) {
+                        expect(err).to.be.an.instanceOf(env.DOMException);      // The polyfill throws a normal error
+                    }
+                    expect(err).to.be.ok;
                     expect(err.name).to.equal('DataError');
                 }
             }
@@ -656,13 +658,8 @@ describe('IDBIndex.get', function() {
         });
     });
 
-    it('should get multi-entry indexes', function(done) {
-        if (env.browser.isIE) {
-            // BUG: IE does not support multi-entry indexes
-            console.error('Skipping test: ' + this.test.title);
-            return done();
-        }
-
+    util.skipIf(env.browser.isIE && (env.isNative || env.isPolyfilled),'should get multi-entry indexes', function(done) {
+        // BUG: IE's native IndexedDB does not support multi-entry indexes
         util.createDatabase('inline', 'multi-entry-index', function(err, db) {
             var tx = db.transaction('inline', 'readwrite');
             var store = tx.objectStore('inline');
@@ -673,6 +670,7 @@ describe('IDBIndex.get', function() {
             store.add({id: ['a']});
             store.add({id: ['b']});
             store.add({id: ['a', 'b', 'c']});
+            store.add({id: [['a', [['b'], 'c']]]});
 
             var storeGet1 = store.get('a');
             var indexGet1 = index.get('a');
@@ -689,6 +687,9 @@ describe('IDBIndex.get', function() {
             var storeGet5 = store.get(['a', 'b', 'c']);
             var indexGet5 = index.get(['a', 'b', 'c']);
 
+            var storeGet6 = store.get(['b']);
+            var indexGet6 = index.get(['b']);
+
 
             tx.oncomplete = function() {
                 expect(storeGet1.result).to.deep.equal({id: 'a'});
@@ -696,17 +697,20 @@ describe('IDBIndex.get', function() {
                 expect(storeGet3.result).to.be.undefined;
                 expect(storeGet4.result).to.be.undefined;
                 expect(storeGet5.result).to.deep.equal({id: ['a', 'b', 'c']});
+                expect(storeGet6.result).to.deep.equal({id: ['b']});
 
                 expect(indexGet1.result).to.deep.equal({id: 'a'});
                 expect(indexGet2.result).not.to.be.ok;
-                if (!env.browser.isSafari) {
+                if (env.isShimmed || !env.browser.isSafari) {
                     expect(indexGet2.result).to.be.undefined;     // Safari returns null
                 }
                 expect(indexGet3.result.id).to.include('b');      // Some browsers return different records
                 expect(indexGet4.result).to.deep.equal({id: ['a', 'b', 'c']});
                 expect(indexGet5.result).not.to.be.ok;
-                if (!env.browser.isSafari) {
+                expect(indexGet6.result).not.to.be.ok;
+                if (env.isShimmed || !env.browser.isSafari) {
                     expect(indexGet5.result).to.be.undefined;     // Safari returns null
+                    expect(indexGet6.result).to.be.undefined;     // Safari returns null
                 }
 
                 db.close();
@@ -715,13 +719,8 @@ describe('IDBIndex.get', function() {
         });
     });
 
-    it('should get unique, multi-entry indexes', function(done) {
-        if (env.browser.isIE) {
-            // BUG: IE does not support multi-entry indexes
-            console.error('Skipping test: ' + this.test.title);
-            return done();
-        }
-
+    util.skipIf(env.browser.isIE && (env.isNative || env.isPolyfilled),'should get unique, multi-entry indexes', function(done) {
+        // BUG: IE's native IndexedDB does not support multi-entry indexes
         util.createDatabase('inline', 'unique-multi-entry-index', function(err, db) {
             var tx = db.transaction('inline', 'readwrite');
             var store = tx.objectStore('inline');
@@ -757,13 +756,13 @@ describe('IDBIndex.get', function() {
 
                 expect(indexGet1.result).to.deep.equal({id: 'a'});
                 expect(indexGet2.result).not.to.be.ok;
-                if (!env.browser.isSafari) {
+                if (env.isShimmed || !env.browser.isSafari) {
                     expect(indexGet2.result).to.be.undefined;     // Safari returns null
                 }
                 expect(indexGet3.result).to.deep.equal({id: ['b']});
                 expect(indexGet4.result).not.to.be.ok;
                 expect(indexGet5.result).not.to.be.ok;
-                if (!env.browser.isSafari) {
+                if (env.isShimmed || !env.browser.isSafari) {
                     expect(indexGet4.result).to.be.undefined;
                     expect(indexGet5.result).to.be.undefined;     // Safari returns null
                 }
@@ -774,13 +773,8 @@ describe('IDBIndex.get', function() {
         });
     });
 
-    it('should not throw an error if called an incomplete compound key', function(done) {
-        if (env.browser.isIE) {
-            // BUG: IE does not support compound keys at all
-            console.error('Skipping test: ' + this.test.title);
-            return done();
-        }
-
+    util.skipIf(env.isNative && env.browser.isIE, 'should not throw an error if called an incomplete compound key', function(done) {
+        // BUG: IE's native IndexedDB does not support compound keys at all
         util.createDatabase('inline-compound', 'compound-index', function(err, db) {
             var tx = db.transaction('inline-compound', 'readwrite');
             var store = tx.objectStore('inline-compound');
@@ -802,7 +796,7 @@ describe('IDBIndex.get', function() {
                 // Make sure no data was returned
                 expect(storeGet.result).to.be.undefined;
                 expect(indexGet.result).not.to.be.ok;
-                if (!env.browser.isSafari) {
+                if (env.isShimmed || !env.browser.isSafari) {
                     expect(indexGet.result).to.be.undefined;    // Safari returns null
                 }
 

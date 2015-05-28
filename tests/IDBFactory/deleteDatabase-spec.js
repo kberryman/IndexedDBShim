@@ -33,8 +33,8 @@ describe('IDBFactory.deleteDatabase', function() {
             var del = indexedDB.deleteDatabase(db.name);
 
             del.onsuccess = function(event) {
-                if (!env.browser.isIE && !env.browser.isSafari) {
-                    expect(event).to.be.an.instanceOf(IDBVersionChangeEvent);
+                if (env.isShimmed || (!env.browser.isIE && !env.browser.isSafari)) {
+                    expect(event).to.be.an.instanceOf(IDBVersionChangeEvent);   // IE and Safari use a normal event
                 }
                 done();
             };
@@ -117,14 +117,19 @@ describe('IDBFactory.deleteDatabase', function() {
 
         deleteDatabase(undefined);
         deleteDatabase('');
+        deleteDatabase(util.sampleData.veryLongString);
         deleteDatabase(42);
         deleteDatabase(-0.331);
+        deleteDatabase(Infinity);
+        deleteDatabase(-Infinity);
+        deleteDatabase(NaN);
         deleteDatabase([]);
         deleteDatabase(['a', 'b', 'c']);
         deleteDatabase(new Date());
         deleteDatabase({foo: 'bar'});
+        deleteDatabase(/^regex$/);
 
-        if (!env.browser.isIE) {
+        if (env.isShimmed || !env.browser.isIE) {
             deleteDatabase(null);
         }
 

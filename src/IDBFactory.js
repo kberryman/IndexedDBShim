@@ -1,17 +1,29 @@
-/*jshint globalstrict: true*/
-'use strict';
 (function(idbModules) {
+    'use strict';
+
     var DEFAULT_DB_SIZE = 4 * 1024 * 1024;
-    if (!window.openDatabase) {
-        return;
+    var sysdb;
+
+    /**
+     * Craetes the sysDB to keep track of version numbers for databases
+     **/
+    function createSysDB(success, failure) {
+        function sysDbCreateError(tx, err) {
+            err = idbModules.util.findError(arguments);
+            idbModules.DEBUG && console.log("Error in sysdb transaction - when creating dbVersions", err);
+            failure(err);
+        }
+
+        if (sysdb) {
+            success();
+        }
+        else {
+            sysdb = window.openDatabase("__sysdb__", 1, "System Database", DEFAULT_DB_SIZE);
+            sysdb.transaction(function(tx) {
+                tx.executeSql("CREATE TABLE IF NOT EXISTS dbVersions (name VARCHAR(255), version INT);", [], success, sysDbCreateError);
+            }, sysDbCreateError);
+        }
     }
-    // The sysDB to keep track of version numbers for databases
-    var sysdb = window.openDatabase("__sysdb__", 1, "System Database", DEFAULT_DB_SIZE);
-    sysdb.transaction(function(tx) {
-        tx.executeSql("CREATE TABLE IF NOT EXISTS dbVersions (name VARCHAR(255), version INT);", []);
-    }, function() {
-        idbModules.DEBUG && console.log("Error in sysdb transaction - when creating dbVersions", arguments);
-    });
 
     /**
      * IDBFactory Class
@@ -19,16 +31,13 @@
      * @constructor
      */
     function IDBFactory() {
-        // It's not safe to shim these on the global scope, because it could break other stuff.
-        this.Event = idbModules.Event;
-        this.DOMException = idbModules.DOMException;
-        this.DOMError = idbModules.DOMError;
+        this.modules = idbModules;
     }
 
     /**
      * The IndexedDB Method to create a new database and return the DB
-     * @param {Object} name
-     * @param {Object} version
+     * @param {string} name
+     * @param {number} version
      */
     IDBFactory.prototype.open = function(name, version) {
         var req = new idbModules.IDBOpenDBRequest();
@@ -45,10 +54,11 @@
         }
         name = name + ''; // cast to a string
 
-        function dbCreateError(err) {
+        function dbCreateError(tx, err) {
             if (calledDbCreateError) {
                 return;
             }
+            err = idbModules.util.findError(arguments);
             calledDbCreateError = true;
             var evt = idbModules.util.createEvent("error", arguments);
             req.readyState = "done";
@@ -80,7 +90,7 @@
                                     var e = idbModules.util.createEvent("upgradeneeded");
                                     e.oldVersion = oldVersion;
                                     e.newVersion = version;
-                                    req.transaction = req.result.__versionTransaction = new idbModules.IDBTransaction([], idbModules.IDBTransaction.VERSION_CHANGE, req.source);
+                                    req.transaction = req.result.__versionTransaction = new idbModules.IDBTransaction(req.source, [], idbModules.IDBTransaction.VERSION_CHANGE);
                                     req.transaction.__addToTransactionQueue(function onupgradeneeded(tx, args, success) {
                                         idbModules.util.callback("onupgradeneeded", req, e);
                                         success();
@@ -100,22 +110,29 @@
             }, dbCreateError);
         }
 
-        sysdb.transaction(function(tx) {
-            tx.executeSql("SELECT * FROM dbVersions where name = ?", [name], function(tx, data) {
-                if (data.rows.length === 0) {
-                    // Database with this name does not exist
-                    tx.executeSql("INSERT INTO dbVersions VALUES (?,?)", [name, version || 1], function() {
-                        openDB(0);
-                    }, dbCreateError);
-                } else {
-                    openDB(data.rows.item(0).version);
-                }
+        createSysDB(function() {
+            sysdb.transaction(function(tx) {
+                tx.executeSql("SELECT * FROM dbVersions where name = ?", [name], function(tx, data) {
+                    if (data.rows.length === 0) {
+                        // Database with this name does not exist
+                        tx.executeSql("INSERT INTO dbVersions VALUES (?,?)", [name, version || 1], function() {
+                            openDB(0);
+                        }, dbCreateError);
+                    } else {
+                        openDB(data.rows.item(0).version);
+                    }
+                }, dbCreateError);
             }, dbCreateError);
         }, dbCreateError);
 
         return req;
     };
 
+    /**
+     * Deletes a database
+     * @param {string} name
+     * @returns {IDBOpenDBRequest}
+     */
     IDBFactory.prototype.deleteDatabase = function(name) {
         var req = new idbModules.IDBOpenDBRequest();
         var calledDBError = false;
@@ -126,14 +143,14 @@
         }
         name = name + ''; // cast to a string
 
-        function dbError(msg) {
+        function dbError(tx, err) {
             if (calledDBError) {
                 return;
             }
+            err = idbModules.util.findError(arguments);
             req.readyState = "done";
-            req.error = "DOMError";
+            req.error = err || "DOMError";
             var e = idbModules.util.createEvent("error");
-            e.message = msg;
             e.debug = arguments;
             idbModules.util.callback("onerror", req, e);
             calledDBError = true;
@@ -151,49 +168,90 @@
             }, dbError);
         }
 
-        sysdb.transaction(function(systx) {
-            systx.executeSql("SELECT * FROM dbVersions where name = ?", [name], function(tx, data) {
-                if (data.rows.length === 0) {
-                    req.result = undefined;
-                    var e = idbModules.util.createEvent("success");
-                    e.newVersion = null;
-                    e.oldVersion = version;
-                    idbModules.util.callback("onsuccess", req, e);
-                    return;
-                }
-                version = data.rows.item(0).version;
-                var db = window.openDatabase(name, 1, name, DEFAULT_DB_SIZE);
-                db.transaction(function(tx) {
-                    tx.executeSql("SELECT * FROM __sys__", [], function(tx, data) {
-                        var tables = data.rows;
-                        (function deleteTables(i) {
-                            if (i >= tables.length) {
-                                // If all tables are deleted, delete the housekeeping tables
-                                tx.executeSql("DROP TABLE __sys__", [], function() {
-                                    // Finally, delete the record for this DB from sysdb
-                                    deleteFromDbVersions();
-                                }, dbError);
-                            } else {
-                                // Delete all tables in this database, maintained in the sys table
-                                tx.executeSql("DROP TABLE " + idbModules.util.quote(tables.item(i).name), [], function() {
-                                    deleteTables(i + 1);
-                                }, function() {
-                                    deleteTables(i + 1);
-                                });
-                            }
-                        }(0));
-                    }, function(e) {
-                        // __sysdb table does not exist, but that does not mean delete did not happen
-                        deleteFromDbVersions();
+        createSysDB(function() {
+            sysdb.transaction(function(systx) {
+                systx.executeSql("SELECT * FROM dbVersions where name = ?", [name], function(tx, data) {
+                    if (data.rows.length === 0) {
+                        req.result = undefined;
+                        var e = idbModules.util.createEvent("success");
+                        e.newVersion = null;
+                        e.oldVersion = version;
+                        idbModules.util.callback("onsuccess", req, e);
+                        return;
+                    }
+                    version = data.rows.item(0).version;
+                    var db = window.openDatabase(name, 1, name, DEFAULT_DB_SIZE);
+                    db.transaction(function(tx) {
+                        tx.executeSql("SELECT * FROM __sys__", [], function(tx, data) {
+                            var tables = data.rows;
+                            (function deleteTables(i) {
+                                if (i >= tables.length) {
+                                    // If all tables are deleted, delete the housekeeping tables
+                                    tx.executeSql("DROP TABLE IF EXISTS __sys__", [], function() {
+                                        // Finally, delete the record for this DB from sysdb
+                                        deleteFromDbVersions();
+                                    }, dbError);
+                                } else {
+                                    // Delete all tables in this database, maintained in the sys table
+                                    tx.executeSql("DROP TABLE " + idbModules.util.quote(tables.item(i).name), [], function() {
+                                        deleteTables(i + 1);
+                                    }, function() {
+                                        deleteTables(i + 1);
+                                    });
+                                }
+                            }(0));
+                        }, function(e) {
+                            // __sysdb table does not exist, but that does not mean delete did not happen
+                            deleteFromDbVersions();
+                        });
                     });
                 }, dbError);
-            });
+            }, dbError);
         }, dbError);
+
         return req;
     };
 
+    /**
+     * Compares two keys
+     * @param key1
+     * @param key2
+     * @returns {number}
+     */
     IDBFactory.prototype.cmp = function(key1, key2) {
-        return idbModules.Key.encodeKey(key1) > idbModules.Key.encodeKey(key2) ? 1 : key1 === key2 ? 0 : -1;
+        if (arguments.length < 2) {
+            throw new TypeError("You must provide two keys to be compared");
+        }
+
+        idbModules.Key.validate(key1);
+        idbModules.Key.validate(key2);
+        var encodedKey1 = idbModules.Key.encode(key1);
+        var encodedKey2 = idbModules.Key.encode(key2);
+        var result = encodedKey1 > encodedKey2 ? 1 : encodedKey1 === encodedKey2 ? 0 : -1;
+        
+        if (idbModules.DEBUG) {
+            // verify that the keys encoded correctly
+            var decodedKey1 = idbModules.Key.decode(encodedKey1);
+            var decodedKey2 = idbModules.Key.decode(encodedKey2);
+            if (typeof key1 === "object") {
+                key1 = JSON.stringify(key1);
+                decodedKey1 = JSON.stringify(decodedKey1);
+            }
+            if (typeof key2 === "object") {
+                key2 = JSON.stringify(key2);
+                decodedKey2 = JSON.stringify(decodedKey2);
+            }
+
+            // encoding/decoding mismatches are usually due to a loss of floating-point precision
+            if (decodedKey1 !== key1) {
+                console.warn(key1 + ' was incorrectly encoded as ' + decodedKey1);
+            }
+            if (decodedKey2 !== key2) {
+                console.warn(key2 + ' was incorrectly encoded as ' + decodedKey2);
+            }
+        }
+        
+        return result;
     };
 
 

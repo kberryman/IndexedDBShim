@@ -8,7 +8,9 @@ describe('IDBObjectStore.add', function() {
         if (env.browser.isFirefox) {
             // Firefox throws a global error when a transaction fails.
             // Catch the error and stop it from propagating
-            window.onerror = function() { return true; };
+            window.onerror = function() {
+                return true;
+            };
         }
     });
 
@@ -24,7 +26,6 @@ describe('IDBObjectStore.add', function() {
             };
 
             var tx = db.transaction('out-of-line', 'readwrite');
-            tx.oncomplete = sinon.spy();
             tx.onerror = sinon.spy();
 
             var store = tx.objectStore('out-of-line');
@@ -49,7 +50,7 @@ describe('IDBObjectStore.add', function() {
                 sinon.assert.notCalled(tx.oncomplete);
                 sinon.assert.called(tx.onerror);
 
-                if (!env.browser.isSafari) {
+                if (env.isShimmed || !env.browser.isSafari) {
                     expect(add2.error).to.be.an.instanceOf(env.DOMError);   // Safari's DOMError is private
                 }
                 expect(add2.error.name).to.equal('ConstraintError');
@@ -57,13 +58,67 @@ describe('IDBObjectStore.add', function() {
                 db.close();
                 done();
             };
+
+            tx.oncomplete = sinon.spy(function () {
+                if (add2.onsuccess.called) {
+                    db.close();
+                    done(new Error('IDBObjectStore.add() should have thrown an error when two records were added with the same primary key'));
+                }
+            });
+        });
+    });
+
+    it('should throw an error if an out-of-line key conflict occurs in simultaneous transactions', function(done) {
+        util.createDatabase('out-of-line', function(err, db) {
+            var tx1 = db.transaction('out-of-line', 'readwrite');
+            var tx2 = db.transaction('out-of-line', 'readwrite');
+            var tx3 = db.transaction('out-of-line', 'readwrite');
+
+            var store1 = tx1.objectStore('out-of-line');
+            var store2 = tx2.objectStore('out-of-line');
+            var store3 = tx3.objectStore('out-of-line');
+
+            var save1 = store1.add({foo: 'one'}, 1);
+            var save2 = store2.add({foo: 'two'}, 1);
+            var save3 = store3.add({foo: 'three'}, 1);
+
+            save1.onsuccess = save2.onsuccess = save3.onsuccess = sinon.spy();
+            tx1.onerror = tx2.onerror = tx3.onerror = sinon.spy();
+
+            tx1.onabort = tx2.onabort = tx3.onabort = sinon.spy(function() {
+                if (tx1.oncomplete.calledOnce && tx1.onerror.calledTwice && tx1.onabort.calledTwice) {
+                    expect(save1.result).to.equal(1);
+                    expect(save2.result).not.to.be.ok;
+                    expect(save3.result).not.to.be.ok;
+
+                    expect(save2.error.name).to.equal('ConstraintError');
+                    expect(save3.error.name).to.equal('ConstraintError');
+
+                    if (env.isShimmed || !env.browser.isSafari) {
+                        expect(save2.result).to.be.undefined;   // Safari uses null
+                        expect(save3.result).to.be.undefined;   // Safari uses null
+
+                        expect(save2.error).to.be.an.instanceOf(env.DOMError);     // Safari's DOMError is private
+                        expect(save3.error).to.be.an.instanceOf(env.DOMError);     // Safari's DOMError is private
+                    }
+
+                    db.close();
+                    done();
+                }
+            });
+
+            tx1.oncomplete = tx2.oncomplete = tx3.oncomplete = sinon.spy(function () {
+                if (save1.calledThrice) {
+                    db.close();
+                    done(new Error('IDBObjectStore.add() should have thrown an error when two records were added with the same primary key'));
+                }
+            });
         });
     });
 
     it('should throw an error if a generated out-of-line key already exists', function(done) {
         util.createDatabase('out-of-line-generated', function(err, db) {
             var tx = db.transaction('out-of-line-generated', 'readwrite');
-            tx.oncomplete = sinon.spy();
             tx.onerror = sinon.spy();
 
             var store = tx.objectStore('out-of-line-generated');
@@ -75,11 +130,6 @@ describe('IDBObjectStore.add', function() {
             add2.onsuccess = sinon.spy();
             add2.onerror = sinon.spy();
 
-            var allData;
-            util.getAll(store, function(err, data) {
-                allData = data;
-            });
-
             tx.onabort = function() {
                 // The first add should succeed
                 sinon.assert.calledOnce(add1.onsuccess);
@@ -93,7 +143,7 @@ describe('IDBObjectStore.add', function() {
                 sinon.assert.notCalled(tx.oncomplete);
                 sinon.assert.called(tx.onerror);
 
-                if (!env.browser.isSafari) {
+                if (env.isShimmed || !env.browser.isSafari) {
                     expect(add2.error).to.be.an.instanceOf(env.DOMError);   // Safari's DOMError is private
                 }
                 expect(add2.error.name).to.equal('ConstraintError');
@@ -101,13 +151,19 @@ describe('IDBObjectStore.add', function() {
                 db.close();
                 done();
             };
+
+            tx.oncomplete = sinon.spy(function () {
+                if (add2.onsuccess.called) {
+                    db.close();
+                    done(new Error('IDBObjectStore.add() should have thrown an error when two records were added with the same primary key'));
+                }
+            });
         });
     });
 
     it('should throw an error if an inline key already exists', function(done) {
         util.createDatabase('inline', function(err, db) {
             var tx = db.transaction('inline', 'readwrite');
-            tx.oncomplete = sinon.spy();
             tx.onerror = sinon.spy();
 
             var store = tx.objectStore('inline');
@@ -119,11 +175,6 @@ describe('IDBObjectStore.add', function() {
             add2.onsuccess = sinon.spy();
             add2.onerror = sinon.spy();
 
-            var allData;
-            util.getAll(store, function(err, data) {
-                allData = data;
-            });
-
             tx.onabort = function() {
                 // The first add should succeed
                 sinon.assert.calledOnce(add1.onsuccess);
@@ -137,7 +188,7 @@ describe('IDBObjectStore.add', function() {
                 sinon.assert.notCalled(tx.oncomplete);
                 sinon.assert.called(tx.onerror);
 
-                if (!env.browser.isSafari) {
+                if (env.isShimmed || !env.browser.isSafari) {
                     expect(add2.error).to.be.an.instanceOf(env.DOMError);   // Safari's DOMError is private
                 }
                 expect(add2.error.name).to.equal('ConstraintError');
@@ -145,13 +196,67 @@ describe('IDBObjectStore.add', function() {
                 db.close();
                 done();
             };
+
+            tx.oncomplete = sinon.spy(function () {
+                if (add2.onsuccess.called) {
+                    db.close();
+                    done(new Error('IDBObjectStore.add() should have thrown an error when two records were added with the same primary key'));
+                }
+            });
+        });
+    });
+
+    it('should throw an error if an inline key conflict occurs in simultaneous transactions', function(done) {
+        util.createDatabase('inline', function(err, db) {
+            var tx1 = db.transaction('inline', 'readwrite');
+            var tx2 = db.transaction('inline', 'readwrite');
+            var tx3 = db.transaction('inline', 'readwrite');
+
+            var store1 = tx1.objectStore('inline');
+            var store2 = tx2.objectStore('inline');
+            var store3 = tx3.objectStore('inline');
+
+            var save1 = store1.add({id: 1});
+            var save2 = store2.add({id: 1});
+            var save3 = store3.add({id: 1});
+
+            save1.onsuccess = save2.onsuccess = save3.onsuccess = sinon.spy();
+            tx1.onerror = tx2.onerror = tx3.onerror = sinon.spy();
+
+            tx1.onabort = tx2.onabort = tx3.onabort = sinon.spy(function() {
+                if (tx1.oncomplete.calledOnce && tx1.onerror.calledTwice && tx1.onabort.calledTwice) {
+                    expect(save1.result).to.equal(1);
+                    expect(save2.result).not.to.be.ok;
+                    expect(save3.result).not.to.be.ok;
+
+                    expect(save2.error.name).to.equal('ConstraintError');
+                    expect(save3.error.name).to.equal('ConstraintError');
+
+                    if (env.isShimmed || !env.browser.isSafari) {
+                        expect(save2.result).to.be.undefined;   // Safari uses null
+                        expect(save3.result).to.be.undefined;   // Safari uses null
+
+                        expect(save2.error).to.be.an.instanceOf(env.DOMError);     // Safari's DOMError is private
+                        expect(save3.error).to.be.an.instanceOf(env.DOMError);     // Safari's DOMError is private
+                    }
+
+                    db.close();
+                    done();
+                }
+            });
+
+            tx1.oncomplete = tx2.oncomplete = tx3.oncomplete = sinon.spy(function () {
+                if (save1.calledThrice) {
+                    db.close();
+                    done(new Error('IDBObjectStore.add() should have thrown an error when two records were added with the same primary key'));
+                }
+            });
         });
     });
 
     it('should throw an error if a generated inline key already exists', function(done) {
         util.createDatabase('inline-generated', function(err, db) {
             var tx = db.transaction('inline-generated', 'readwrite');
-            tx.oncomplete = sinon.spy();
             tx.onerror = sinon.spy();
 
             var store = tx.objectStore('inline-generated');
@@ -163,11 +268,6 @@ describe('IDBObjectStore.add', function() {
             add2.onsuccess = sinon.spy();
             add2.onerror = sinon.spy();
 
-            var allData;
-            util.getAll(store, function(err, data) {
-                allData = data;
-            });
-
             tx.onabort = function() {
                 // The first add should succeed
                 sinon.assert.calledOnce(add1.onsuccess);
@@ -181,7 +281,7 @@ describe('IDBObjectStore.add', function() {
                 sinon.assert.notCalled(tx.oncomplete);
                 sinon.assert.called(tx.onerror);
 
-                if (!env.browser.isSafari) {
+                if (env.isShimmed || !env.browser.isSafari) {
                     expect(add2.error).to.be.an.instanceOf(env.DOMError);   // Safari's DOMError is private
                 }
                 expect(add2.error.name).to.equal('ConstraintError');
@@ -189,13 +289,19 @@ describe('IDBObjectStore.add', function() {
                 db.close();
                 done();
             };
+
+            tx.oncomplete = sinon.spy(function () {
+                if (add2.onsuccess.called) {
+                    db.close();
+                    done(new Error('IDBObjectStore.add() should have thrown an error when two records were added with the same primary key'));
+                }
+            });
         });
     });
 
     it('should throw an error if a dotted key already exists', function(done) {
         util.createDatabase('dotted', function(err, db) {
             var tx = db.transaction('dotted', 'readwrite');
-            tx.oncomplete = sinon.spy();
             tx.onerror = sinon.spy();
 
             var store = tx.objectStore('dotted');
@@ -207,11 +313,6 @@ describe('IDBObjectStore.add', function() {
             add2.onsuccess = sinon.spy();
             add2.onerror = sinon.spy();
 
-            var allData;
-            util.getAll(store, function(err, data) {
-                allData = data;
-            });
-
             tx.onabort = function() {
                 // The first add should succeed
                 sinon.assert.calledOnce(add1.onsuccess);
@@ -225,7 +326,7 @@ describe('IDBObjectStore.add', function() {
                 sinon.assert.notCalled(tx.oncomplete);
                 sinon.assert.called(tx.onerror);
 
-                if (!env.browser.isSafari) {
+                if (env.isShimmed || !env.browser.isSafari) {
                     expect(add2.error).to.be.an.instanceOf(env.DOMError);   // Safari's DOMError is private
                 }
                 expect(add2.error.name).to.equal('ConstraintError');
@@ -233,13 +334,19 @@ describe('IDBObjectStore.add', function() {
                 db.close();
                 done();
             };
+
+            tx.oncomplete = sinon.spy(function () {
+                if (add2.onsuccess.called) {
+                    db.close();
+                    done(new Error('IDBObjectStore.add() should have thrown an error when two records were added with the same primary key'));
+                }
+            });
         });
     });
 
     it('should throw an error if a generated dotted key already exists', function(done) {
         util.createDatabase('dotted-generated', function(err, db) {
             var tx = db.transaction('dotted-generated', 'readwrite');
-            tx.oncomplete = sinon.spy();
             tx.onerror = sinon.spy();
 
             var store = tx.objectStore('dotted-generated');
@@ -251,11 +358,6 @@ describe('IDBObjectStore.add', function() {
             add2.onsuccess = sinon.spy();
             add2.onerror = sinon.spy();
 
-            var allData;
-            util.getAll(store, function(err, data) {
-                allData = data;
-            });
-
             tx.onabort = function() {
                 // The first add should succeed
                 sinon.assert.calledOnce(add1.onsuccess);
@@ -269,7 +371,7 @@ describe('IDBObjectStore.add', function() {
                 sinon.assert.notCalled(tx.oncomplete);
                 sinon.assert.called(tx.onerror);
 
-                if (!env.browser.isSafari) {
+                if (env.isShimmed || !env.browser.isSafari) {
                     expect(add2.error).to.be.an.instanceOf(env.DOMError);   // Safari's DOMError is private
                 }
                 expect(add2.error.name).to.equal('ConstraintError');
@@ -277,19 +379,20 @@ describe('IDBObjectStore.add', function() {
                 db.close();
                 done();
             };
+
+            tx.oncomplete = sinon.spy(function () {
+                if (add2.onsuccess.called) {
+                    db.close();
+                    done(new Error('IDBObjectStore.add() should have thrown an error when two records were added with the same primary key'));
+                }
+            });
         });
     });
 
-    it('should throw an error if a compound out-of-line key already exists', function(done) {
-        if (env.browser.isIE) {
-            // BUG: IE does not support compound keys at all
-            console.error('Skipping test: ' + this.test.title);
-            return done();
-        }
-
+    util.skipIf(env.isNative && env.browser.isIE, 'should throw an error if a compound out-of-line key already exists', function(done) {
+        // BUG: IE's native IndexedDB does not support compound keys at all
         util.createDatabase('out-of-line-compound', function(err, db) {
             var tx = db.transaction('out-of-line-compound', 'readwrite');
-            tx.oncomplete = sinon.spy();
             tx.onerror = sinon.spy();
 
             var store = tx.objectStore('out-of-line-compound');
@@ -301,11 +404,6 @@ describe('IDBObjectStore.add', function() {
             add2.onsuccess = sinon.spy();
             add2.onerror = sinon.spy();
 
-            var allData;
-            util.getAll(store, function(err, data) {
-                allData = data;
-            });
-
             tx.onabort = function() {
                 // The first add should succeed
                 sinon.assert.calledOnce(add1.onsuccess);
@@ -319,7 +417,7 @@ describe('IDBObjectStore.add', function() {
                 sinon.assert.notCalled(tx.oncomplete);
                 sinon.assert.called(tx.onerror);
 
-                if (!env.browser.isSafari) {
+                if (env.isShimmed || !env.browser.isSafari) {
                     expect(add2.error).to.be.an.instanceOf(env.DOMError);   // Safari's DOMError is private
                 }
                 expect(add2.error.name).to.equal('ConstraintError');
@@ -327,19 +425,20 @@ describe('IDBObjectStore.add', function() {
                 db.close();
                 done();
             };
+
+            tx.oncomplete = sinon.spy(function () {
+                if (add2.onsuccess.called) {
+                    db.close();
+                    done(new Error('IDBObjectStore.add() should have thrown an error when two records were added with the same primary key'));
+                }
+            });
         });
     });
 
-    it('should throw an error if a compound key already exists', function(done) {
-        if (env.browser.isIE) {
-            // BUG: IE does not support compound keys at all
-            console.error('Skipping test: ' + this.test.title);
-            return done();
-        }
-
+    util.skipIf(env.isNative && env.browser.isIE, 'should throw an error if a compound key already exists', function(done) {
+        // BUG: IE's native IndexedDB does not support compound keys at all
         util.createDatabase('inline-compound', function(err, db) {
             var tx = db.transaction('inline-compound', 'readwrite');
-            tx.oncomplete = sinon.spy();
             tx.onerror = sinon.spy();
 
             var store = tx.objectStore('inline-compound');
@@ -351,11 +450,6 @@ describe('IDBObjectStore.add', function() {
             add2.onsuccess = sinon.spy();
             add2.onerror = sinon.spy();
 
-            var allData;
-            util.getAll(store, function(err, data) {
-                allData = data;
-            });
-
             tx.onabort = function() {
                 // The first add should succeed
                 sinon.assert.calledOnce(add1.onsuccess);
@@ -369,7 +463,7 @@ describe('IDBObjectStore.add', function() {
                 sinon.assert.notCalled(tx.oncomplete);
                 sinon.assert.called(tx.onerror);
 
-                if (!env.browser.isSafari) {
+                if (env.isShimmed || !env.browser.isSafari) {
                     expect(add2.error).to.be.an.instanceOf(env.DOMError);   // Safari's DOMError is private
                 }
                 expect(add2.error.name).to.equal('ConstraintError');
@@ -377,19 +471,20 @@ describe('IDBObjectStore.add', function() {
                 db.close();
                 done();
             };
+
+            tx.oncomplete = sinon.spy(function () {
+                if (add2.onsuccess.called) {
+                    db.close();
+                    done(new Error('IDBObjectStore.add() should have thrown an error when two records were added with the same primary key'));
+                }
+            });
         });
     });
 
-    it('should throw an error if a dotted compound key already exists', function(done) {
-        if (env.browser.isIE) {
-            // BUG: IE does not support compound keys at all
-            console.error('Skipping test: ' + this.test.title);
-            return done();
-        }
-
+    util.skipIf(env.isNative && env.browser.isIE, 'should throw an error if a dotted compound key already exists', function(done) {
+        // BUG: IE's native IndexedDB does not support compound keys at all
         util.createDatabase('dotted-compound', function(err, db) {
             var tx = db.transaction('dotted-compound', 'readwrite');
-            tx.oncomplete = sinon.spy();
             tx.onerror = sinon.spy();
 
             var store = tx.objectStore('dotted-compound');
@@ -401,11 +496,6 @@ describe('IDBObjectStore.add', function() {
             add2.onsuccess = sinon.spy();
             add2.onerror = sinon.spy();
 
-            var allData;
-            util.getAll(store, function(err, data) {
-                allData = data;
-            });
-
             tx.onabort = function() {
                 // The first add should succeed
                 sinon.assert.calledOnce(add1.onsuccess);
@@ -419,7 +509,7 @@ describe('IDBObjectStore.add', function() {
                 sinon.assert.notCalled(tx.oncomplete);
                 sinon.assert.called(tx.onerror);
 
-                if (!env.browser.isSafari) {
+                if (env.isShimmed || !env.browser.isSafari) {
                     expect(add2.error).to.be.an.instanceOf(env.DOMError);   // Safari's DOMError is private
                 }
                 expect(add2.error.name).to.equal('ConstraintError');
@@ -427,6 +517,13 @@ describe('IDBObjectStore.add', function() {
                 db.close();
                 done();
             };
+
+            tx.oncomplete = sinon.spy(function () {
+                if (add2.onsuccess.called) {
+                    db.close();
+                    done(new Error('IDBObjectStore.add() should have thrown an error when two records were added with the same primary key'));
+                }
+            });
         });
     });
 });

@@ -204,6 +204,26 @@ queuedAsyncTest("Creating an Object Store", function(){
     };
 });
 
+queuedAsyncTest("Reopening an Object Store", function(){
+    var dbOpenRequest = window.indexedDB.open(DB.NAME);
+    dbOpenRequest.onsuccess = function(e){
+        _("Database opened successfully");
+        var db = dbOpenRequest.result;
+        var transaction = db.transaction([DB.OBJECT_STORE_1], "readonly");
+        var objectStore = transaction.objectStore(DB.OBJECT_STORE_1);
+        equal(objectStore.autoIncrement, false, "AutoIncrement defaults to false");
+        dbOpenRequest.result.close();
+        start();
+        nextTest();
+    };
+    dbOpenRequest.onerror = function(e){
+        ok(false, "Database NOT Opened successfully");
+        _("Database NOT opened successfully");
+        start();
+        nextTest();
+    };
+});
+
 queuedAsyncTest("Deleting an Object Store", function(){
     var dbOpenRequest = xc_indexedDB.open(DB.NAME, ++dbVersion);
     dbOpenRequest.onsuccess = function(e){
